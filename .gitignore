@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+.ruff_cache/
+.pytest_cache/
+service-account.json
+.env
+uv.lock
