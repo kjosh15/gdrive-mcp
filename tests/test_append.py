@@ -96,3 +96,33 @@ async def test_append_to_google_sheet_uses_sheets_api(mock_services):
         ["col1", "col2", "col3"],
         ["row2c1", "row2c2", "row2c3"],
     ]
+
+
+@pytest.mark.asyncio
+async def test_append_to_plain_file_roundtrips(mock_services):
+    """Appending to a plain file downloads, concats, and re-uploads."""
+    drive = mock_services["drive"]
+
+    drive.files().get.return_value.execute.return_value = {
+        "name": "notes.md",
+        "mimeType": "text/markdown",
+        "modifiedTime": "2026-04-10T12:00:00Z",
+    }
+    drive.files().get_media.return_value.execute.return_value = b"existing content"
+    drive.files().update.return_value.execute.return_value = {
+        "id": "plain1",
+        "name": "notes.md",
+        "webViewLink": "https://example.com",
+        "version": "2",
+        "modifiedTime": "2026-04-10T12:05:00Z",
+    }
+
+    from gdrive_mcp.server import append_to_file
+    result = await append_to_file(
+        file_id="plain1", content="new line", separator="\n"
+    )
+
+    assert result["mode"] == "plain_roundtrip"
+    assert result["bytes_appended"] == len(b"\nnew line")
+    # verify update was called with concatenated content
+    drive.files().update.assert_called_once()
