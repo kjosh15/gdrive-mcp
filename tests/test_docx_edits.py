@@ -47,3 +47,55 @@ def test_insert_tracked_change_not_found_raises():
     original = make_docx([("Hello world", None)])
     with pytest.raises(NotFoundError):
         insert_tracked_change(original, "xyz", "abc", "Claude")
+
+
+def test_insert_tracked_change_spans_two_runs():
+    from gdrive_mcp.docx_edits import insert_tracked_change
+
+    # Three runs: "The ", "bold" (bold), " word"
+    original = make_docx([
+        ("The ", None),
+        ("bold", {"bold": True}),
+        (" word", None),
+    ])
+    modified = insert_tracked_change(
+        original, find_text="bold word", replace_text="brave word", author="Claude"
+    )
+    xml = _extract_document_xml(modified)
+    assert "<w:del " in xml
+    assert "<w:ins " in xml
+    assert "brave word" in xml
+    # "The " must still be present as ordinary text (not inside del)
+    assert "The " in xml
+
+
+def test_insert_tracked_change_spans_three_runs():
+    from gdrive_mcp.docx_edits import insert_tracked_change
+
+    original = make_docx([
+        ("The ", None),
+        ("bold", {"bold": True}),
+        (" word here", None),
+    ])
+    modified = insert_tracked_change(
+        original, find_text="The bold word", replace_text="A brave word", author="Claude"
+    )
+    xml = _extract_document_xml(modified)
+    assert "<w:del " in xml
+    assert "A brave word" in xml
+    assert " here" in xml  # trailing text preserved
+
+
+def test_insert_tracked_change_match_at_run_boundary():
+    from gdrive_mcp.docx_edits import insert_tracked_change
+
+    original = make_docx([
+        ("Hello", None),
+        (" world", None),
+    ])
+    modified = insert_tracked_change(
+        original, "Hello world", "Goodbye world", "Claude"
+    )
+    xml = _extract_document_xml(modified)
+    assert "Goodbye world" in xml
+    assert "<w:del " in xml
