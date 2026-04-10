@@ -1,5 +1,6 @@
 """Google Drive MCP server — thin wrappers over *_ops modules."""
 
+import asyncio
 import logging
 import os
 import sys
@@ -7,9 +8,12 @@ from typing import Any, Optional
 
 from fastmcp import FastMCP
 
-from gdrive_mcp import auth, drive_ops
+from gdrive_mcp import auth, docs_ops, drive_ops, sheets_ops
 
 mcp = FastMCP("gdrive-mcp")
+
+GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
+GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
 
 @mcp.tool()
