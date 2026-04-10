@@ -14,16 +14,47 @@ uv run ruff check .
 
 # Run locally
 uv run python -m gdrive_mcp
+
+# One-time OAuth setup (generates GOOGLE_OAUTH_REFRESH_TOKEN)
+uv run python -m gdrive_mcp.auth_setup
 ```
 
 ## Project Structure
 
-- `src/gdrive_mcp/server.py` — FastMCP server with 4 Drive tools
-- `src/gdrive_mcp/drive.py` — Google Drive API wrapper
-- `tests/` — Unit tests (mocked Drive API)
+- `src/gdrive_mcp/auth.py` — OAuth user credential loader + service factories
+- `src/gdrive_mcp/auth_setup.py` — one-time OAuth consent CLI
+- `src/gdrive_mcp/drive_ops.py` — Drive v3 operations (download, upload, search, metadata, comments)
+- `src/gdrive_mcp/docs_ops.py` — Docs v1 operations (append, replace_text)
+- `src/gdrive_mcp/sheets_ops.py` — Sheets v4 operations (append rows)
+- `src/gdrive_mcp/docx_edits.py` — OOXML tracked-changes (pure functions)
+- `src/gdrive_mcp/server.py` — FastMCP server exposing 9 tools
+- `tests/` — pytest suite mirroring the module split
+
+## Tools
+
+1. `download_file` — download or export a file
+2. `upload_file` — create or update a file
+3. `search_files` — Drive query syntax search
+4. `get_file_metadata` — single-file metadata
+5. `get_files_metadata` — batch metadata for N files
+6. `append_to_file` — native append for Docs/Sheets; roundtrip fallback for plain files
+7. `replace_text` — exact + regex replace in Google Docs
+8. `manage_comments` — list/create/reply/resolve on Drive comments
+9. `docx_suggest_edit` — tracked-change revision marks in .docx files
+
+## Environment Variables
+
+Required:
+- `GOOGLE_OAUTH_CLIENT_ID` — OAuth 2.0 client ID from GCP console
+- `GOOGLE_OAUTH_CLIENT_SECRET` — OAuth 2.0 client secret
+- `GOOGLE_OAUTH_REFRESH_TOKEN` — long-lived refresh token (generate via `auth_setup`)
+
+Optional:
+- `PORT` — HTTP port for the FastMCP server (default 8080)
 
 ## Key Constraints
 
 - No database, no state, no LLM calls
-- Service account auth via `GOOGLE_SERVICE_ACCOUNT_JSON` env var
+- Single-user OAuth only (service accounts removed)
 - Streamable HTTP transport for Cloud Run
+- `docx_suggest_edit` requires matches to fit within one paragraph (v1)
