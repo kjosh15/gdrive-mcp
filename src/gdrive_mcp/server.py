@@ -270,6 +270,75 @@ async def manage_comments(
     }
 
 
+@mcp.tool()
+async def docx_suggest_edit(
+    file_id: str,
+    find_text: str,
+    replace_text: str,
+    author: str = "Claude",
+) -> dict[str, Any]:
+    """Insert tracked-change revision marks into a .docx file.
+
+    Only works on real .docx files in Drive (mimeType
+    application/vnd.openxmlformats-officedocument.wordprocessingml.document).
+    For Google Docs, use replace_text. Matches must fit within a single
+    paragraph (cross-paragraph is v2).
+    """
+    drive = auth.get_drive_service()
+    meta = await asyncio.to_thread(
+        lambda: drive.files()
+        .get(fileId=file_id, fields="name,mimeType,size")
+        .execute()
+    )
+    if meta.get("mimeType") != DOCX_MIME:
+        return {
+            "error": "NOT_A_DOCX",
+            "retryable": False,
+            "message": (
+                f"docx_suggest_edit only works on .docx files. This file is "
+                f"{meta.get('mimeType')}. Use replace_text for Google Docs."
+            ),
+        }
+
+    original = await asyncio.to_thread(
+        lambda: drive.files().get_media(fileId=file_id).execute()
+    )
+    try:
+        modified = docx_edits.insert_tracked_change(
+            original, find_text, replace_text, author
+        )
+    except docx_edits.NotFoundError as e:
+        return {
+            "error": "FIND_TEXT_NOT_FOUND",
+            "retryable": False,
+            "message": str(e),
+        }
+    except docx_edits.CrossParagraphError as e:
+        return {
+            "error": "CROSS_PARAGRAPH_MATCH",
+            "retryable": False,
+            "message": (
+                f"{e} Split into per-paragraph edits and call this tool once "
+                f"per paragraph."
+            ),
+        }
+
+    import base64 as _b64
+    upload_result = await drive_ops.upload_file(
+        drive,
+        content_base64=_b64.b64encode(modified).decode(),
+        file_name=meta["name"],
+        mime_type=DOCX_MIME,
+        file_id=file_id,
+    )
+    return {
+        "file_id": file_id,
+        "file_name": meta["name"],
+        "occurrences_edited": 1,
+        "modified_time": upload_result.get("modified_time", ""),
+    }
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
