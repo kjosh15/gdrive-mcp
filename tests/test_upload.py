@@ -13,21 +13,6 @@ def mock_drive():
         yield service
 
 
-def _quota_exceeded_error() -> HttpError:
-    """Build a realistic storageQuotaExceeded HttpError like the Drive API returns."""
-    resp = MagicMock()
-    resp.status = 403
-    resp.reason = "Forbidden"
-    content = (
-        b'{"error": {"errors": [{"domain": "usageLimits", '
-        b'"reason": "storageQuotaExceeded", "message": '
-        b'"Service Accounts do not have storage quota. '
-        b'Leverage shared drives instead."}], "code": 403, '
-        b'"message": "Service Accounts do not have storage quota."}}'
-    )
-    return HttpError(resp=resp, content=content)
-
-
 @pytest.mark.asyncio
 async def test_upload_new_file(mock_drive):
     """Create a new file in a folder."""
