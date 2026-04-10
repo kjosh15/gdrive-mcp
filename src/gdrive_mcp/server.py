@@ -108,8 +108,15 @@ async def append_to_file(
         )
         modified_time = meta2.get("modifiedTime", "")
     elif mime == GOOGLE_SHEET_MIME:
-        # implemented in Task 10
-        raise NotImplementedError("Sheets path added in Task 10")
+        sheets = auth.get_sheets_service()
+        ops_result = await sheets_ops.append_rows(sheets, file_id, content)
+        mode = "sheets_native"
+        meta2 = await asyncio.to_thread(
+            lambda: drive.files()
+            .get(fileId=file_id, fields="modifiedTime")
+            .execute()
+        )
+        modified_time = meta2.get("modifiedTime", "")
     else:
         # implemented in Task 11
         raise NotImplementedError("Plain-file path added in Task 11")
