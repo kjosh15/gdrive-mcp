@@ -1,12 +1,13 @@
 [project]
 name = "gdrive-mcp"
 version = "0.1.0"
-description = "Minimal Google Drive MCP server for .docx tracked-changes workflow"
+description = "Google Drive, Docs, and Sheets MCP server with append, replace, tracked-changes, and comment support"
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=2.0.0",
     "google-api-python-client>=2.110.0",
     "google-auth>=2.25.0",
+    "google-auth-oauthlib>=1.2.0",
     "uvicorn>=0.30.0",
 ]
 
