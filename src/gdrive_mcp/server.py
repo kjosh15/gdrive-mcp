@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from fastmcp import FastMCP
 
-from gdrive_mcp import auth, docs_ops, drive_ops, sheets_ops
+from gdrive_mcp import auth, docs_ops, drive_ops
 
 mcp = FastMCP("gdrive-mcp")
 
