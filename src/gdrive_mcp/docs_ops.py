@@ -1,6 +1,7 @@
 """Google Docs v1 operations — append, replace_text."""
 
 import asyncio
+import re
 from typing import Any
 
 
