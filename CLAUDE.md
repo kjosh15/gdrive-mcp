@@ -60,3 +60,7 @@ Optional:
 - Single-user OAuth only (service accounts removed)
 - Streamable HTTP transport for Cloud Run
 - `docx_suggest_edit` requires matches to fit within one paragraph (v1)
+
+## Session Tracking
+Total Claude sessions: 1
+Last session: 2026-04-11 12:45:24
