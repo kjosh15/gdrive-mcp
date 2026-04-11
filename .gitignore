@@ -6,5 +6,8 @@ dist/
 .ruff_cache/
 .pytest_cache/
 service-account.json
+oauth-client.json
+client_secret*.json
+refresh-token.txt
 .env
 uv.lock
