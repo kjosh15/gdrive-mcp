@@ -347,9 +347,19 @@ def main() -> None:
         stream=sys.stderr,
         force=True,
     )
+    api_key = os.environ.get("GDRIVE_MCP_API_KEY")
+    if not api_key:
+        print(
+            "ERROR: GDRIVE_MCP_API_KEY environment variable is required. "
+            "Refusing to start an unauthenticated MCP server.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     import uvicorn
 
     app = mcp.http_app(stateless_http=True)
+    app.add_middleware(APIKeyMiddleware, api_key=api_key)
     port = int(os.environ.get("PORT", "8080"))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
