@@ -208,9 +208,21 @@ Note the `Header-Name:Header-Value` format with **no space** around the colon �
 
 After editing, fully quit Claude Desktop (Cmd+Q) and reopen it. The config is only read at startup.
 
+### Claude.ai
+
+Add a remote MCP integration in **Settings → Integrations → Add More** with this URL:
+
+```
+https://gdrive-mcp-1055579418514.us-central1.run.app/mcp?key=<api-key>
+```
+
+Claude.ai doesn't support custom auth headers on MCP servers, so the API key is passed as a query parameter instead.
+
 ### Other MCP clients
 
-Same idea: point them at `https://gdrive-mcp-1055579418514.us-central1.run.app/mcp` and inject `Authorization: Bearer <api-key>` on every request. If the client doesn't natively support headers, wrap it with `npx mcp-remote ... --header Authorization:Bearer <api-key>`.
+Point them at `https://gdrive-mcp-1055579418514.us-central1.run.app/mcp` and inject `Authorization: Bearer <api-key>` on every request. If the client doesn't natively support headers, either:
+- Append `?key=<api-key>` to the URL, or
+- Wrap with `npx mcp-remote ... --header Authorization:Bearer <api-key>`
 
 ## Logs
 
