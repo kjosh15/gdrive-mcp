@@ -240,18 +240,24 @@ async def reply_to_comment(
 async def resolve_comment(
     service, file_id: str, comment_id: str
 ) -> dict[str, Any]:
-    # Drive API requires content in the PATCH body even when only resolving
-    existing = await asyncio.to_thread(
-        lambda: service.comments()
-        .get(fileId=file_id, commentId=comment_id, fields="content")
-        .execute()
-    )
-    resp = await asyncio.to_thread(
-        lambda: service.comments()
-        .update(
+    # The Drive API resolves comments via a reply with action="resolve",
+    # not by PATCHing the comment's resolved field (which is read-only).
+    await asyncio.to_thread(
+        lambda: service.replies()
+        .create(
             fileId=file_id,
             commentId=comment_id,
-            body={"resolved": True, "content": existing["content"]},
+            body={"action": "resolve"},
+            fields="id,action",
+        )
+        .execute()
+    )
+    # Fetch the comment to confirm resolved status
+    resp = await asyncio.to_thread(
+        lambda: service.comments()
+        .get(
+            fileId=file_id,
+            commentId=comment_id,
             fields="id,content,resolved",
         )
         .execute()
