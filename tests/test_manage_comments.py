@@ -66,6 +66,9 @@ async def test_manage_comments_reply(mock_drive):
 
 @pytest.mark.asyncio
 async def test_manage_comments_resolve(mock_drive):
+    mock_drive.comments().get.return_value.execute.return_value = {
+        "content": "orig",
+    }
     mock_drive.comments().update.return_value.execute.return_value = {
         "id": "c1", "content": "orig", "resolved": True,
     }
@@ -74,6 +77,13 @@ async def test_manage_comments_resolve(mock_drive):
         file_id="f1", action="resolve", comment_id="c1"
     )
     assert result["resolved"] is True
+    # Verify the GET was called to fetch existing content
+    mock_drive.comments().get.assert_called()
+    # Verify update body includes content
+    mock_drive.comments().update.assert_called_once()
+    call_kwargs = mock_drive.comments().update.call_args
+    assert call_kwargs.kwargs["body"]["content"] == "orig"
+    assert call_kwargs.kwargs["body"]["resolved"] is True
 
 
 @pytest.mark.asyncio
