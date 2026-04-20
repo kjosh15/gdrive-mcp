@@ -1,6 +1,12 @@
 # Deployment Runbook
 
-This document describes how `gdrive-mcp` is deployed and how to operate it.
+> **Note:** The Python package was renamed from `gdrive-mcp` to `gsuite-mcp`
+> (module: `gsuite_mcp`). GCP infrastructure names (project ID
+> `gdrive-mcp-492818`, Cloud Run service `gdrive-mcp`, Secret Manager keys,
+> service URL) are **not** renamed — changing them would require downtime and
+> client reconfiguration.
+
+This document describes how `gsuite-mcp` is deployed and how to operate it.
 **Do not commit secret values to this file.** Use the placeholder names as
 written and rely on Secret Manager for the real values.
 
