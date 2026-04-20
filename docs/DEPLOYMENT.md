@@ -68,8 +68,8 @@ The legacy `gdrive-sa` service-account secret is **kept** for rollback only — 
 # 2. Mint the refresh token (interactive — opens browser)
 GOOGLE_OAUTH_CLIENT_ID='<client-id>' \
 GOOGLE_OAUTH_CLIENT_SECRET='<client-secret>' \
-  uv run python -m gdrive_mcp.auth_setup
-# → Sign in as josh@josh.is, allow Drive/Docs/Sheets scopes
+  uv run python -m gsuite_mcp.auth_setup
+# → Sign in as josh@josh.is, allow Drive/Docs/Sheets/Gmail scopes
 # → Captures GOOGLE_OAUTH_REFRESH_TOKEN
 
 # 3. Generate the API key
