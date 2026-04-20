@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture
 def mock_drive():
-    with patch("gdrive_mcp.auth.get_drive_service") as mock:
+    with patch("gsuite_mcp.auth.get_drive_service") as mock:
         service = MagicMock()
         mock.return_value = service
         yield service
@@ -24,7 +24,7 @@ async def test_get_file_metadata(mock_drive):
         "capabilities": {"canEdit": True, "canDownload": True},
     }
 
-    from gdrive_mcp.server import get_file_metadata
+    from gsuite_mcp.server import get_file_metadata
 
     result = await get_file_metadata(file_id="abc123")
 
