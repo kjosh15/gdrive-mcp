@@ -53,7 +53,7 @@ All four are in project `gdrive-mcp-492818` with automatic replication. The runt
 | `gdrive-oauth-client-id`     | `GOOGLE_OAUTH_CLIENT_ID`      | OAuth Desktop client ID                                |
 | `gdrive-oauth-client-secret` | `GOOGLE_OAUTH_CLIENT_SECRET`  | OAuth Desktop client secret                            |
 | `gdrive-oauth-refresh-token` | `GOOGLE_OAUTH_REFRESH_TOKEN`  | Long-lived refresh token for josh@josh.is              |
-| `gdrive-mcp-api-key`         | `GDRIVE_MCP_API_KEY`          | Shared secret for the bearer-token middleware          |
+| `gdrive-mcp-api-key`         | `GDRIVE_MCP_API_KEY`          | Shared secret for the bearer-token middleware (server also accepts `GSUITE_MCP_API_KEY`) |
 
 The legacy `gdrive-sa` service-account secret is **kept** for rollback only — it is no longer mounted by the current revision.
 
