@@ -47,7 +47,7 @@ def get_credentials() -> Credentials:
     if missing:
         raise AuthError(
             f"Missing required OAuth env vars: {', '.join(missing)}. "
-            "Run `python -m gdrive_mcp.auth_setup` to generate a refresh token."
+            "Run `python -m gsuite_mcp.auth_setup` to generate a refresh token."
         )
 
     creds = Credentials(
