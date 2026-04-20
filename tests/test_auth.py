@@ -27,6 +27,8 @@ def test_get_credentials_from_env(monkeypatch):
                 "https://www.googleapis.com/auth/drive",
                 "https://www.googleapis.com/auth/documents",
                 "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/gmail.compose",
+                "https://www.googleapis.com/auth/gmail.readonly",
             ],
         )
         mock_creds.refresh.assert_called_once()
