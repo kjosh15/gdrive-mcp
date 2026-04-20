@@ -75,3 +75,7 @@ def get_docs_service():
 
 def get_sheets_service():
     return build("sheets", "v4", credentials=get_credentials())
+
+
+def get_gmail_service():
+    return build("gmail", "v1", credentials=get_credentials())
