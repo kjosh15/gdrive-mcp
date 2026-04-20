@@ -12,7 +12,7 @@ from fastmcp import FastMCP
 from gsuite_mcp import auth, docs_ops, docx_edits, drive_ops, sheets_ops
 from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
-mcp = FastMCP("gdrive-mcp")
+mcp = FastMCP("gsuite-mcp")
 
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
