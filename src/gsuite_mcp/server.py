@@ -9,8 +9,8 @@ from typing import Any, Optional
 
 from fastmcp import FastMCP
 
-from gdrive_mcp import auth, docs_ops, docx_edits, drive_ops, sheets_ops
-from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+from gsuite_mcp import auth, docs_ops, docx_edits, drive_ops, sheets_ops
+from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
 mcp = FastMCP("gdrive-mcp")
 
