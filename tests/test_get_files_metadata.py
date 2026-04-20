@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture
 def mock_drive():
-    with patch("gdrive_mcp.auth.get_drive_service") as mock:
+    with patch("gsuite_mcp.auth.get_drive_service") as mock:
         service = MagicMock()
         mock.return_value = service
         yield service
@@ -27,7 +27,7 @@ async def test_get_files_metadata_batch_success(mock_drive):
 
     mock_drive.files().get.side_effect = fake_get
 
-    from gdrive_mcp.server import get_files_metadata
+    from gsuite_mcp.server import get_files_metadata
 
     result = await get_files_metadata(file_ids=["a", "b", "c"])
 
@@ -55,7 +55,7 @@ async def test_get_files_metadata_partial_failure(mock_drive):
 
     mock_drive.files().get.side_effect = fake_get
 
-    from gdrive_mcp.server import get_files_metadata
+    from gsuite_mcp.server import get_files_metadata
 
     result = await get_files_metadata(file_ids=["good1", "bad", "good2"])
 
@@ -68,6 +68,6 @@ async def test_get_files_metadata_partial_failure(mock_drive):
 
 @pytest.mark.asyncio
 async def test_get_files_metadata_empty_list(mock_drive):
-    from gdrive_mcp.server import get_files_metadata
+    from gsuite_mcp.server import get_files_metadata
     result = await get_files_metadata(file_ids=[])
     assert result == {"results": [], "errors": []}
