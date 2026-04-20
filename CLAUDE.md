@@ -44,6 +44,7 @@ uv run python -m gsuite_mcp.auth_setup
 7. `replace_text` — exact + regex replace in Google Docs
 8. `manage_comments` — list/create/reply/resolve on Drive comments
 9. `docx_suggest_edit` — tracked-change revision marks in .docx files
+10. `create_reply_draft` — thread-aware Gmail draft creation (draft only, human sends)
 
 ## Environment Variables
 
