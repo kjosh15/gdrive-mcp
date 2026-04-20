@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture
 def mock_drive():
-    with patch("gdrive_mcp.auth.get_drive_service") as mock:
+    with patch("gsuite_mcp.auth.get_drive_service") as mock:
         service = MagicMock()
         mock.return_value = service
         yield service
@@ -23,7 +23,7 @@ async def test_download_binary_file(mock_drive):
     }
     mock_drive.files().get_media.return_value.execute.return_value = file_bytes
 
-    from gdrive_mcp.server import download_file
+    from gsuite_mcp.server import download_file
 
     result = await download_file(file_id="abc123")
 
@@ -43,7 +43,7 @@ async def test_download_google_doc_as_docx(mock_drive):
     }
     mock_drive.files().export.return_value.execute.return_value = file_bytes
 
-    from gdrive_mcp.server import download_file
+    from gsuite_mcp.server import download_file
 
     export_mime = (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
