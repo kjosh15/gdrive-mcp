@@ -28,7 +28,7 @@ async def _call_next_ok(request: Request) -> PlainTextResponse:
 
 @pytest.mark.asyncio
 async def test_missing_authorization_header_returns_401():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     request = _make_request(headers=[])
@@ -39,7 +39,7 @@ async def test_missing_authorization_header_returns_401():
 
 @pytest.mark.asyncio
 async def test_wrong_bearer_token_returns_401():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     request = _make_request(headers=[(b"authorization", b"Bearer wrongkey")])
@@ -49,7 +49,7 @@ async def test_wrong_bearer_token_returns_401():
 
 @pytest.mark.asyncio
 async def test_correct_bearer_token_passes_through():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     request = _make_request(
@@ -62,7 +62,7 @@ async def test_correct_bearer_token_passes_through():
 
 @pytest.mark.asyncio
 async def test_missing_bearer_scheme_returns_401():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     # Raw token with no "Bearer " prefix should be rejected
@@ -73,7 +73,7 @@ async def test_missing_bearer_scheme_returns_401():
 
 @pytest.mark.asyncio
 async def test_correct_query_param_key_passes_through():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     request = _make_request(headers=[], query_string=b"key=secret123")
@@ -84,7 +84,7 @@ async def test_correct_query_param_key_passes_through():
 
 @pytest.mark.asyncio
 async def test_wrong_query_param_key_returns_401():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     request = _make_request(headers=[], query_string=b"key=wrongkey")
@@ -94,7 +94,7 @@ async def test_wrong_query_param_key_returns_401():
 
 @pytest.mark.asyncio
 async def test_bearer_header_takes_precedence_over_query_param():
-    from gdrive_mcp.api_key_middleware import APIKeyMiddleware
+    from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
     middleware = APIKeyMiddleware(app=None, api_key="secret123")
     # Correct header + wrong query param → should pass (header wins)
