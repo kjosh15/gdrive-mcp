@@ -1,4 +1,4 @@
-"""OAuth user credential loading for Google Drive, Docs, and Sheets APIs."""
+"""OAuth user credential loading for Google Drive, Docs, Sheets, and Gmail APIs."""
 
 import os
 from typing import Optional
