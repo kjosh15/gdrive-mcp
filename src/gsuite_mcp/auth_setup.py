@@ -2,7 +2,7 @@
 
 Usage:
     GOOGLE_OAUTH_CLIENT_ID=... GOOGLE_OAUTH_CLIENT_SECRET=... \
-        python -m gdrive_mcp.auth_setup
+        python -m gsuite_mcp.auth_setup
 """
 
 import os
