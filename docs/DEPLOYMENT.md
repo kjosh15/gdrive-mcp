@@ -268,5 +268,5 @@ GDRIVE_MCP_API_KEY=$(gcloud secrets versions access latest --secret=gdrive-mcp-a
 GOOGLE_OAUTH_CLIENT_ID=$(gcloud secrets versions access latest --secret=gdrive-oauth-client-id --project=gdrive-mcp-492818) \
 GOOGLE_OAUTH_CLIENT_SECRET=$(gcloud secrets versions access latest --secret=gdrive-oauth-client-secret --project=gdrive-mcp-492818) \
 GOOGLE_OAUTH_REFRESH_TOKEN=$(gcloud secrets versions access latest --secret=gdrive-oauth-refresh-token --project=gdrive-mcp-492818) \
-  uv run python -m gdrive_mcp
+  uv run python -m gsuite_mcp
 ```
