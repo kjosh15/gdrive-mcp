@@ -7,7 +7,7 @@ from googleapiclient.errors import HttpError
 
 @pytest.fixture
 def mock_drive():
-    with patch("gdrive_mcp.auth.get_drive_service") as mock:
+    with patch("gsuite_mcp.auth.get_drive_service") as mock:
         service = MagicMock()
         mock.return_value = service
         yield service
@@ -24,7 +24,7 @@ async def test_upload_new_file(mock_drive):
         "modifiedTime": "2026-04-08T10:00:00Z",
     }
 
-    from gdrive_mcp.server import upload_file
+    from gsuite_mcp.server import upload_file
 
     content = base64.b64encode(b"file content").decode()
     result = await upload_file(
@@ -50,7 +50,7 @@ async def test_upload_update_existing(mock_drive):
         "modifiedTime": "2026-04-08T14:30:00Z",
     }
 
-    from gdrive_mcp.server import upload_file
+    from gsuite_mcp.server import upload_file
 
     content = base64.b64encode(b"updated content").decode()
     result = await upload_file(
@@ -76,7 +76,7 @@ async def test_upload_update_still_raises_unknown_errors(mock_drive):
         resp=resp, content=b'{"error": {"message": "boom"}}'
     )
 
-    from gdrive_mcp.server import upload_file
+    from gsuite_mcp.server import upload_file
 
     content = base64.b64encode(b"x").decode()
     with pytest.raises(HttpError):
