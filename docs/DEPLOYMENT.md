@@ -130,7 +130,7 @@ gcloud run deploy gdrive-mcp --source=. --region=us-central1 \
 
 # 4. Update Claude Desktop config (and any other clients)
 #    ~/Library/Application Support/Claude/claude_desktop_config.json
-#    → replace the bearer token in the gdrive-mcp entry's --header arg
+#    → replace the bearer token in the gsuite-mcp entry's --header arg
 #    → Cmd+Q Claude Desktop and reopen
 ```
 
