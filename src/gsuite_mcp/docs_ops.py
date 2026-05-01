@@ -4,6 +4,8 @@ import asyncio
 import re
 from typing import Any
 
+from gsuite_mcp.retry import retry_transient
+
 
 async def append_text_to_doc(
     docs_service, file_id: str, text: str
@@ -26,7 +28,7 @@ async def append_text_to_doc(
             }
         }
     ]
-    await asyncio.to_thread(
+    await retry_transient(
         lambda: docs_service.documents()
         .batchUpdate(documentId=file_id, body={"requests": requests})
         .execute()
@@ -46,7 +48,7 @@ async def replace_all_text(
             }
         }
     ]
-    resp = await asyncio.to_thread(
+    resp = await retry_transient(
         lambda: docs_service.documents()
         .batchUpdate(documentId=file_id, body={"requests": requests})
         .execute()
@@ -110,7 +112,7 @@ async def replace_regex(
             }
         })
 
-    await asyncio.to_thread(
+    await retry_transient(
         lambda: docs_service.documents()
         .batchUpdate(documentId=file_id, body={"requests": requests})
         .execute()
