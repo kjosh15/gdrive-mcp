@@ -149,3 +149,85 @@ async def test_replace_text_invalid_regex_returns_error(mock_services):
     )
     assert result["error"] == "INVALID_REGEX"
     assert result["retryable"] is False
+
+
+def _make_http_error(status: int) -> HttpError:
+    resp = MagicMock()
+    resp.status = status
+    return HttpError(resp, b"error")
+
+
+@pytest.mark.asyncio
+async def test_replace_text_returns_structured_error_on_google_500(mock_services):
+    """Transient Google 500 should return a retryable structured error, not crash."""
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+    drive.files().get.return_value.execute.return_value = {
+        "name": "doc", "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-04-10T12:00:00Z",
+    }
+    docs.documents().batchUpdate.return_value.execute.side_effect = _make_http_error(500)
+
+    from gsuite_mcp.server import replace_text
+    result = await replace_text(file_id="d1", find="foo", replace="bar")
+
+    assert result["error"] == "GOOGLE_API_ERROR"
+    assert result["retryable"] is True
+    assert "500" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_replace_text_returns_structured_error_on_google_403(mock_services):
+    """Non-transient 403 should return a non-retryable structured error."""
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+    drive.files().get.return_value.execute.return_value = {
+        "name": "doc", "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-04-10T12:00:00Z",
+    }
+    docs.documents().batchUpdate.return_value.execute.side_effect = _make_http_error(403)
+
+    from gsuite_mcp.server import replace_text
+    result = await replace_text(file_id="d1", find="foo", replace="bar")
+
+    assert result["error"] == "GOOGLE_API_ERROR"
+    assert result["retryable"] is False
+    assert "403" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_replace_text_regex_returns_structured_error_on_google_500(mock_services):
+    """Regex mode should also catch transient Google errors."""
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+    drive.files().get.return_value.execute.return_value = {
+        "name": "doc", "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-04-10T12:00:00Z",
+    }
+    # documents.get for regex mode
+    docs.documents().get.return_value.execute.return_value = {
+        "body": {
+            "content": [
+                {
+                    "startIndex": 1, "endIndex": 10,
+                    "paragraph": {
+                        "elements": [
+                            {
+                                "startIndex": 1, "endIndex": 10,
+                                "textRun": {"content": "hello v1.2\n"},
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    }
+    docs.documents().batchUpdate.return_value.execute.side_effect = _make_http_error(500)
+
+    from gsuite_mcp.server import replace_text
+    result = await replace_text(
+        file_id="d1", find=r"v\d+\.\d+", replace="vNEW", regex=True
+    )
+
+    assert result["error"] == "GOOGLE_API_ERROR"
+    assert result["retryable"] is True
