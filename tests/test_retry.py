@@ -1,6 +1,6 @@
 """Tests for retry_transient helper."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from googleapiclient.errors import HttpError
