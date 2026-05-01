@@ -1,8 +1,11 @@
+#!include:.gitignore
 .git
 .venv
 __pycache__
 *.pyc
 .ruff_cache
+.pytest_cache
 tests/
 docs/
 *.egg-info
+.claude
