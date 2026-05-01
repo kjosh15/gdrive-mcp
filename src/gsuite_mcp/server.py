@@ -184,17 +184,33 @@ async def replace_text(
         }
     docs = auth.get_docs_service()
 
-    if regex:
-        try:
-            count = await docs_ops.replace_regex(
-                docs, file_id, find, replace, match_case
+    try:
+        if regex:
+            try:
+                count = await docs_ops.replace_regex(
+                    docs, file_id, find, replace, match_case
+                )
+            except re.error as e:
+                return {
+                    "error": "INVALID_REGEX",
+                    "retryable": False,
+                    "message": f"Invalid regex pattern: {e}",
+                }
+            meta2 = await asyncio.to_thread(
+                lambda: drive.files()
+                .get(fileId=file_id, fields="modifiedTime")
+                .execute()
             )
-        except re.error as e:
             return {
-                "error": "INVALID_REGEX",
-                "retryable": False,
-                "message": f"Invalid regex pattern: {e}",
+                "file_id": file_id,
+                "replacements_made": count,
+                "regex_mode": True,
+                "modified_time": meta2.get("modifiedTime", ""),
             }
+
+        count = await docs_ops.replace_all_text(
+            docs, file_id, find, replace, match_case
+        )
         meta2 = await asyncio.to_thread(
             lambda: drive.files()
             .get(fileId=file_id, fields="modifiedTime")
@@ -203,22 +219,19 @@ async def replace_text(
         return {
             "file_id": file_id,
             "replacements_made": count,
-            "regex_mode": True,
+            "regex_mode": False,
             "modified_time": meta2.get("modifiedTime", ""),
         }
-
-    count = await docs_ops.replace_all_text(docs, file_id, find, replace, match_case)
-    meta2 = await asyncio.to_thread(
-        lambda: drive.files()
-        .get(fileId=file_id, fields="modifiedTime")
-        .execute()
-    )
-    return {
-        "file_id": file_id,
-        "replacements_made": count,
-        "regex_mode": False,
-        "modified_time": meta2.get("modifiedTime", ""),
-    }
+    except HttpError as exc:
+        status = exc.resp.status if exc.resp else 0
+        return {
+            "error": "GOOGLE_API_ERROR",
+            "retryable": status in TRANSIENT_CODES,
+            "http_status": status,
+            "message": (
+                f"Google Docs API error (HTTP {status}) after retries: {exc}"
+            ),
+        }
 
 
 @mcp.tool()
