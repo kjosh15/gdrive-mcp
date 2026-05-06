@@ -55,3 +55,53 @@ async def test_template_populate_copies_and_replaces(mock_services):
     assert len(requests) == 2
     assert requests[0]["replaceAllText"]["containsText"]["text"] == "{{NAME}}"
     assert requests[0]["replaceAllText"]["replaceText"] == "Alice"
+
+
+@pytest.mark.asyncio
+async def test_template_populate_empty_replacements(mock_services):
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+
+    drive.files().copy.return_value.execute.return_value = {
+        "id": "new456",
+        "name": "Empty",
+        "webViewLink": "https://docs.google.com/document/d/new456/edit",
+    }
+
+    from gsuite_mcp.server import gdoc_template_populate
+    result = await gdoc_template_populate(
+        template_file_id="tmpl1",
+        parent_folder_id="folder1",
+        new_title="Empty",
+        replacements={},
+    )
+
+    assert result["file_id"] == "new456"
+    assert result["replacements_made"] == {}
+    # batchUpdate should NOT be called with empty replacements
+    docs.documents().batchUpdate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_template_populate_zero_occurrences(mock_services):
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+
+    drive.files().copy.return_value.execute.return_value = {
+        "id": "new789",
+        "name": "NoMatch",
+        "webViewLink": "https://docs.google.com/document/d/new789/edit",
+    }
+    docs.documents().batchUpdate.return_value.execute.return_value = {
+        "replies": [{"replaceAllText": {}}]  # no occurrencesChanged key
+    }
+
+    from gsuite_mcp.server import gdoc_template_populate
+    result = await gdoc_template_populate(
+        template_file_id="tmpl1",
+        parent_folder_id="folder1",
+        new_title="NoMatch",
+        replacements={"{{MISSING}}": "value"},
+    )
+
+    assert result["replacements_made"] == {"{{MISSING}}": 0}
