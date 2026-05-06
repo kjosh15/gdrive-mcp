@@ -38,7 +38,7 @@ uv run python -m gsuite_mcp.auth_setup
 ## Tools
 
 1. `download_file` — download or export a file
-2. `upload_file` — create or update a file
+2. `upload_file` — create or update a file (returns `bytes_uploaded` + `file_size` for truncation detection)
 3. `search_files` — Drive query syntax search
 4. `get_file_metadata` — single-file metadata
 5. `get_files_metadata` — batch metadata for N files
