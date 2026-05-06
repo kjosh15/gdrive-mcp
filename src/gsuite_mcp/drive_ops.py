@@ -46,6 +46,7 @@ async def upload_file(
     parent_folder_id: Optional[str] = None,
 ) -> dict[str, Any]:
     file_bytes = base64.b64decode(content_base64)
+    bytes_uploaded = len(file_bytes)
     media = MediaIoBaseUpload(
         io.BytesIO(file_bytes), mimetype=mime_type, resumable=True
     )
@@ -72,12 +73,25 @@ async def upload_file(
             )
             .execute()
         )
+    # Query actual file size from Drive to let callers detect truncation
+    # by comparing bytes_uploaded vs file_size.
+    actual_id = result["id"]
+    meta = await asyncio.to_thread(
+        lambda: service.files()
+        .get(fileId=actual_id, fields="size")
+        .execute()
+    )
+    # Native Google formats (Docs, Sheets) don't report size; use
+    # bytes_uploaded as the fallback so the comparison is still valid.
+    file_size = int(meta["size"]) if "size" in meta else bytes_uploaded
     return {
-        "file_id": result["id"],
+        "file_id": actual_id,
         "file_name": result["name"],
         "web_view_link": result.get("webViewLink", ""),
         "version": result.get("version", ""),
         "modified_time": result.get("modifiedTime", ""),
+        "bytes_uploaded": bytes_uploaded,
+        "file_size": file_size,
     }
 
 
