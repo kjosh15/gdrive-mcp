@@ -27,6 +27,9 @@ packages = ["src/gsuite_mcp"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit real Google APIs (require credentials)",
+]
 
 [tool.ruff]
 line-length = 88
