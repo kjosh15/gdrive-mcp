@@ -392,6 +392,42 @@ async def gdoc_template_populate(
 
 
 @mcp.tool()
+async def gdoc_suggest_edit(
+    file_id: str,
+    find_text: str,
+    replace_text: str,
+    author: str = "Claude",
+) -> dict[str, Any]:
+    """Create a .docx copy of a Google Doc with tracked-change suggestions.
+
+    Exports the Google Doc as .docx, applies tracked-change revision marks
+    for find_text -> replace_text, and uploads the result as a new .docx file
+    in the same folder. The original Google Doc is unchanged.
+
+    Open the new .docx in Google Docs or Word to review suggestions.
+    For .docx files already in Drive, use docx_suggest_edit instead.
+    """
+    try:
+        return await gdoc_ops.suggest_edit(
+            drive_service=auth.get_drive_service(),
+            file_id=file_id,
+            find_text=find_text,
+            replace_text=replace_text,
+            author=author,
+        )
+    except HttpError as exc:
+        status = exc.resp.status if exc.resp else 0
+        return {
+            "error": "GOOGLE_API_ERROR",
+            "retryable": status in TRANSIENT_CODES,
+            "http_status": status,
+            "message": (
+                f"Google API error (HTTP {status}) during suggest edit: {exc}"
+            ),
+        }
+
+
+@mcp.tool()
 async def create_reply_draft(
     thread_id: str,
     in_reply_to_message_id: str,
