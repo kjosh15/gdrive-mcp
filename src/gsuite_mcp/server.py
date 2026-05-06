@@ -10,7 +10,7 @@ from typing import Any, Optional
 from fastmcp import FastMCP
 from googleapiclient.errors import HttpError
 
-from gsuite_mcp import auth, docs_ops, docx_edits, drive_ops, gmail_ops, sheets_ops
+from gsuite_mcp import auth, docs_ops, docx_edits, drive_ops, gdoc_ops, gmail_ops, sheets_ops
 from gsuite_mcp.retry import TRANSIENT_CODES
 from gsuite_mcp.api_key_middleware import APIKeyMiddleware
 
