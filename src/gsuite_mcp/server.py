@@ -370,14 +370,25 @@ async def gdoc_template_populate(
 
     Returns {file_id, web_view_link, replacements_made: {placeholder: count}}.
     """
-    return await gdoc_ops.template_populate(
-        drive_service=auth.get_drive_service(),
-        docs_service=auth.get_docs_service(),
-        template_file_id=template_file_id,
-        parent_folder_id=parent_folder_id,
-        new_title=new_title,
-        replacements=replacements,
-    )
+    try:
+        return await gdoc_ops.template_populate(
+            drive_service=auth.get_drive_service(),
+            docs_service=auth.get_docs_service(),
+            template_file_id=template_file_id,
+            parent_folder_id=parent_folder_id,
+            new_title=new_title,
+            replacements=replacements,
+        )
+    except HttpError as exc:
+        status = exc.resp.status if exc.resp else 0
+        return {
+            "error": "GOOGLE_API_ERROR",
+            "retryable": status in TRANSIENT_CODES,
+            "http_status": status,
+            "message": (
+                f"Google API error (HTTP {status}) during template populate: {exc}"
+            ),
+        }
 
 
 @mcp.tool()
