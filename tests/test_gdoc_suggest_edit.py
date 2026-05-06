@@ -98,3 +98,27 @@ async def test_gdoc_suggest_edit_find_text_not_found(mock_services):
     )
 
     assert result["error"] == "FIND_TEXT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_gdoc_suggest_edit_cross_paragraph(mock_services):
+    drive = mock_services["drive"]
+    drive.files().get.return_value.execute.return_value = {
+        "name": "Doc",
+        "mimeType": "application/vnd.google-apps.document",
+        "parents": ["p1"],
+    }
+    exported_docx = make_docx([("Hello world", None)])
+    drive.files().export.return_value.execute.return_value = exported_docx
+
+    with patch(
+        "gsuite_mcp.gdoc_ops.docx_edits.insert_tracked_change",
+        side_effect=__import__("gsuite_mcp.docx_edits", fromlist=["CrossParagraphError"]).CrossParagraphError("spans boundary"),
+    ):
+        from gsuite_mcp.server import gdoc_suggest_edit
+        result = await gdoc_suggest_edit(
+            file_id="d1", find_text="Hello world", replace_text="Hi",
+        )
+
+    assert result["error"] == "CROSS_PARAGRAPH_MATCH"
+    assert "per paragraph" in result["message"]
