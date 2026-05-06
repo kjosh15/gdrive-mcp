@@ -111,9 +111,10 @@ async def test_gdoc_suggest_edit_cross_paragraph(mock_services):
     exported_docx = make_docx([("Hello world", None)])
     drive.files().export.return_value.execute.return_value = exported_docx
 
+    from gsuite_mcp.docx_edits import CrossParagraphError
     with patch(
         "gsuite_mcp.gdoc_ops.docx_edits.insert_tracked_change",
-        side_effect=__import__("gsuite_mcp.docx_edits", fromlist=["CrossParagraphError"]).CrossParagraphError("spans boundary"),
+        side_effect=CrossParagraphError("spans boundary"),
     ):
         from gsuite_mcp.server import gdoc_suggest_edit
         result = await gdoc_suggest_edit(
