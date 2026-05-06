@@ -78,3 +78,92 @@ async def template_populate(
         "web_view_link": copied.get("webViewLink", ""),
         "replacements_made": replacements_made,
     }
+
+
+async def suggest_edit(
+    drive_service,
+    file_id: str,
+    find_text: str,
+    replace_text: str,
+    author: str = "Claude",
+) -> dict[str, Any]:
+    """Export a Google Doc as .docx, apply a tracked change, re-upload as new .docx.
+
+    The original Google Doc is untouched. A new .docx file with tracked-change
+    revision marks is created alongside it in the same parent folder.
+    """
+    meta = await asyncio.to_thread(
+        lambda: drive_service.files()
+        .get(fileId=file_id, fields="name,mimeType,parents")
+        .execute()
+    )
+
+    if meta.get("mimeType") != GOOGLE_DOC_MIME:
+        return {
+            "error": "NOT_A_GOOGLE_DOC",
+            "retryable": False,
+            "message": (
+                f"gdoc_suggest_edit only works on native Google Docs. "
+                f"This file is {meta.get('mimeType')}. "
+                f"For .docx files, use docx_suggest_edit directly."
+            ),
+        }
+
+    exported = await asyncio.to_thread(
+        lambda: drive_service.files()
+        .export(fileId=file_id, mimeType=DOCX_MIME)
+        .execute()
+    )
+
+    try:
+        modified = docx_edits.insert_tracked_change(
+            exported, find_text, replace_text, author
+        )
+    except docx_edits.NotFoundError as e:
+        return {
+            "error": "FIND_TEXT_NOT_FOUND",
+            "retryable": False,
+            "message": str(e),
+        }
+    except docx_edits.CrossParagraphError as e:
+        return {
+            "error": "CROSS_PARAGRAPH_MATCH",
+            "retryable": False,
+            "message": (
+                f"{e} Split into per-paragraph edits and call this tool once "
+                f"per paragraph."
+            ),
+        }
+
+    original_name = meta.get("name", "Untitled")
+    new_name = f"{original_name} (with suggestions).docx"
+    parents = meta.get("parents", [])
+
+    media = MediaIoBaseUpload(
+        io.BytesIO(modified), mimetype=DOCX_MIME, resumable=True
+    )
+    body: dict[str, Any] = {"name": new_name}
+    if parents:
+        body["parents"] = parents
+
+    result = await asyncio.to_thread(
+        lambda: drive_service.files()
+        .create(
+            body=body,
+            media_body=media,
+            fields="id,name,webViewLink,version,modifiedTime",
+        )
+        .execute()
+    )
+
+    return {
+        "file_id": result["id"],
+        "file_name": result["name"],
+        "web_view_link": result.get("webViewLink", ""),
+        "original_file_id": file_id,
+        "modified_time": result.get("modifiedTime", ""),
+        "note": (
+            "A new .docx file with tracked-change suggestions has been created. "
+            "Open it to review the suggestions. The original Google Doc is unchanged."
+        ),
+    }
