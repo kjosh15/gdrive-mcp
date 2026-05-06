@@ -54,6 +54,9 @@ async def test_upload_update_existing(mock_drive):
         "version": "4",
         "modifiedTime": "2026-04-08T14:30:00Z",
     }
+    mock_drive.files().get.return_value.execute.return_value = {
+        "size": "15",
+    }
 
     from gsuite_mcp.server import upload_file
 
@@ -67,6 +70,8 @@ async def test_upload_update_existing(mock_drive):
 
     assert result["file_id"] == "existing789"
     assert result["version"] == "4"
+    assert result["bytes_uploaded"] == 15
+    assert result["file_size"] == 15
     mock_drive.files().update.assert_called_once()
     mock_drive.files().create.assert_not_called()
 
