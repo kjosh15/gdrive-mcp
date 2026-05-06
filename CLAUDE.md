@@ -47,6 +47,8 @@ uv run python -m gsuite_mcp.auth_setup
 8. `manage_comments` — list/create/reply/resolve on Drive comments
 9. `docx_suggest_edit` — tracked-change revision marks in .docx files
 10. `create_reply_draft` — thread-aware Gmail draft creation (draft only, human sends)
+11. `gdoc_template_populate` — copy template → native Google Doc, replace placeholders
+12. `gdoc_suggest_edit` — export Google Doc as .docx, apply tracked change, re-upload as new .docx
 
 ## Environment Variables
 
