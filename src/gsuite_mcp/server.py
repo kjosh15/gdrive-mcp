@@ -356,6 +356,31 @@ async def docx_suggest_edit(
 
 
 @mcp.tool()
+async def gdoc_template_populate(
+    template_file_id: str,
+    parent_folder_id: str,
+    new_title: str,
+    replacements: dict[str, str],
+) -> dict[str, Any]:
+    """Copy a template file as a native Google Doc and replace placeholders.
+
+    Copies the template using Drive files.copy with automatic .docx-to-Google-Doc
+    conversion, places it in the specified parent folder, then issues a single
+    documents.batchUpdate with replaceAllText for each placeholder.
+
+    Returns {file_id, web_view_link, replacements_made: {placeholder: count}}.
+    """
+    return await gdoc_ops.template_populate(
+        drive_service=auth.get_drive_service(),
+        docs_service=auth.get_docs_service(),
+        template_file_id=template_file_id,
+        parent_folder_id=parent_folder_id,
+        new_title=new_title,
+        replacements=replacements,
+    )
+
+
+@mcp.tool()
 async def create_reply_draft(
     thread_id: str,
     in_reply_to_message_id: str,
