@@ -77,6 +77,64 @@ async def test_upload_update_existing(mock_drive):
 
 
 @pytest.mark.asyncio
+async def test_upload_returns_size_mismatch_on_truncation(mock_drive):
+    """bytes_uploaded vs file_size lets callers detect truncation."""
+    mock_drive.files().update.return_value.execute.return_value = {
+        "id": "trunc1",
+        "name": "big.pdf",
+        "webViewLink": "https://drive.google.com/file/d/trunc1/view",
+        "version": "2",
+        "modifiedTime": "2026-05-06T00:00:00Z",
+    }
+    # Simulate Drive reporting a smaller file than what we uploaded
+    mock_drive.files().get.return_value.execute.return_value = {
+        "size": "500",
+    }
+
+    from gsuite_mcp.server import upload_file
+
+    payload = b"x" * 1000
+    content = base64.b64encode(payload).decode()
+    result = await upload_file(
+        content_base64=content,
+        file_name="big.pdf",
+        mime_type="application/pdf",
+        file_id="trunc1",
+    )
+
+    assert result["bytes_uploaded"] == 1000
+    assert result["file_size"] == 500
+    # Caller can detect: bytes_uploaded != file_size → truncation
+    assert result["bytes_uploaded"] != result["file_size"]
+
+
+@pytest.mark.asyncio
+async def test_upload_native_google_format_no_size_field(mock_drive):
+    """Native Google formats don't report size — fallback to bytes_uploaded."""
+    mock_drive.files().create.return_value.execute.return_value = {
+        "id": "gdoc1",
+        "name": "doc",
+        "webViewLink": "https://docs.google.com/document/d/gdoc1/edit",
+        "version": "1",
+        "modifiedTime": "2026-05-06T00:00:00Z",
+    }
+    # Native Google Docs don't have a 'size' field
+    mock_drive.files().get.return_value.execute.return_value = {}
+
+    from gsuite_mcp.server import upload_file
+
+    content = base64.b64encode(b"hello").decode()
+    result = await upload_file(
+        content_base64=content,
+        file_name="doc",
+        mime_type="text/plain",
+    )
+
+    assert result["bytes_uploaded"] == 5
+    assert result["file_size"] == 5  # falls back to bytes_uploaded
+
+
+@pytest.mark.asyncio
 async def test_upload_update_still_raises_unknown_errors(mock_drive):
     """Non-quota errors must still propagate so we don't swallow real bugs."""
     resp = MagicMock()
