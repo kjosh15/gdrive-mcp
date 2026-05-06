@@ -1,12 +1,19 @@
 """Google Doc operations — template populate and suggest-edit via .docx export."""
 
 import asyncio
+import io
 from typing import Any
 
+from googleapiclient.http import MediaIoBaseUpload
+
+from gsuite_mcp import docx_edits
 from gsuite_mcp.retry import retry_transient
 
 
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
+DOCX_MIME = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
 
 
 async def template_populate(
