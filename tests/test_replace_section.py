@@ -487,3 +487,112 @@ async def test_replace_section_ensures_trailing_newline():
 
     insert_req = requests[1]["insertText"]
     assert insert_req["text"] == "No newline\n"
+
+
+# -------------------------------------------------------------------
+# Server-level tests for replace_section tool wrapper
+# -------------------------------------------------------------------
+
+from unittest.mock import patch
+from googleapiclient.errors import HttpError
+
+from gsuite_mcp.server import replace_section as server_replace_section
+
+
+@pytest.fixture
+def mock_services():
+    with patch("gsuite_mcp.auth.get_drive_service") as mock_drive, \
+         patch("gsuite_mcp.auth.get_docs_service") as mock_docs:
+        drive = MagicMock()
+        docs = MagicMock()
+        mock_drive.return_value = drive
+        mock_docs.return_value = docs
+        yield {"drive": drive, "docs": docs}
+
+
+def _make_http_error(status: int) -> HttpError:
+    resp = MagicMock()
+    resp.status = status
+    return HttpError(resp, b"error")
+
+
+@pytest.mark.asyncio
+async def test_server_replace_section_not_a_google_doc(mock_services):
+    """Server wrapper rejects non-Google-Doc files with NOT_A_GOOGLE_DOC."""
+    drive = mock_services["drive"]
+    drive.files().get.return_value.execute.return_value = {
+        "name": "file.docx",
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "modifiedTime": "2026-05-10T12:00:00Z",
+    }
+
+    result = await server_replace_section(
+        file_id="d1",
+        section_heading="Chapter 1",
+        new_content="New body.\n",
+    )
+
+    assert result["error"] == "NOT_A_GOOGLE_DOC"
+    assert result["retryable"] is False
+    assert "replace_section" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_server_replace_section_success(mock_services):
+    """Server wrapper returns result with modified_time on success."""
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+
+    # Drive metadata says it's a Google Doc
+    drive.files().get.return_value.execute.return_value = {
+        "name": "My Doc",
+        "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-05-10T14:00:00Z",
+    }
+
+    # Docs API returns the document structure
+    docs.documents().get.return_value.execute.return_value = _make_doc(
+        (0, 10, "Chapter 1\n", "HEADING_1"),
+        (10, 30, "Old body text here.\n", "NORMAL_TEXT"),
+        (30, 40, "Chapter 2\n", "HEADING_1"),
+    )
+    docs.documents().batchUpdate.return_value.execute.return_value = {"replies": []}
+
+    result = await server_replace_section(
+        file_id="d1",
+        section_heading="Chapter 1",
+        new_content="New body.\n",
+    )
+
+    assert "error" not in result
+    assert result["file_id"] == "d1"
+    assert result["section_heading"] == "Chapter 1"
+    assert "modified_time" in result
+    assert result["modified_time"] == "2026-05-10T14:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_server_replace_section_catches_http_error(mock_services):
+    """Server wrapper catches HttpError 500 and returns structured error."""
+    drive = mock_services["drive"]
+    docs = mock_services["docs"]
+
+    drive.files().get.return_value.execute.return_value = {
+        "name": "My Doc",
+        "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-05-10T14:00:00Z",
+    }
+
+    # Docs API document fetch raises HttpError
+    docs.documents().get.return_value.execute.side_effect = _make_http_error(500)
+
+    result = await server_replace_section(
+        file_id="d1",
+        section_heading="Chapter 1",
+        new_content="New body.\n",
+    )
+
+    assert result["error"] == "GOOGLE_API_ERROR"
+    assert result["retryable"] is True
+    assert result["http_status"] == 500
+    assert "500" in result["message"]
