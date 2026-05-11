@@ -496,12 +496,6 @@ async def test_replace_section_ensures_trailing_newline():
 # Server-level tests for replace_section tool wrapper
 # -------------------------------------------------------------------
 
-from unittest.mock import patch
-from googleapiclient.errors import HttpError
-
-from gsuite_mcp.server import replace_section as server_replace_section
-
-
 @pytest.fixture
 def mock_services():
     with patch("gsuite_mcp.auth.get_drive_service") as mock_drive, \
