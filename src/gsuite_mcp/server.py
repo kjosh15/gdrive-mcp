@@ -235,6 +235,71 @@ async def replace_text(
 
 
 @mcp.tool()
+async def replace_section(
+    file_id: str,
+    section_heading: str,
+    new_content: str,
+    include_heading: bool = False,
+) -> dict[str, Any]:
+    """Replace content in a Google Doc by heading/section.
+
+    Finds a heading by text match (formal heading styles first, then any
+    paragraph as fallback), determines the section boundary (to the next
+    same-or-higher-level heading), and replaces the content atomically.
+
+    Args:
+        file_id: Google Drive file ID of a native Google Doc.
+        section_heading: Text of the heading to find (case-insensitive, stripped).
+        new_content: Replacement text for the section body (or heading+body
+            if include_heading=True).
+        include_heading: If True, also replace the heading paragraph itself.
+            Default False (preserve heading, replace only body).
+    """
+    drive = auth.get_drive_service()
+    meta = await asyncio.to_thread(
+        lambda: drive.files()
+        .get(fileId=file_id, fields="name,mimeType,modifiedTime")
+        .execute()
+    )
+    if meta.get("mimeType") != GOOGLE_DOC_MIME:
+        return {
+            "error": "NOT_A_GOOGLE_DOC",
+            "retryable": False,
+            "message": (
+                f"replace_section only works on Google Docs. This file is "
+                f"{meta.get('mimeType')}. For real .docx files, use "
+                f"docx_suggest_edit. For other files, download/edit/upload."
+            ),
+        }
+    docs = auth.get_docs_service()
+
+    try:
+        result = await docs_ops.replace_section(
+            docs, file_id, section_heading, new_content, include_heading
+        )
+        if "error" in result:
+            return result
+        # Fetch updated modifiedTime
+        meta2 = await asyncio.to_thread(
+            lambda: drive.files()
+            .get(fileId=file_id, fields="modifiedTime")
+            .execute()
+        )
+        result["modified_time"] = meta2.get("modifiedTime", "")
+        return result
+    except HttpError as exc:
+        status = exc.resp.status if exc.resp else 0
+        return {
+            "error": "GOOGLE_API_ERROR",
+            "retryable": status in TRANSIENT_CODES,
+            "http_status": status,
+            "message": (
+                f"Google Docs API error (HTTP {status}) after retries: {exc}"
+            ),
+        }
+
+
+@mcp.tool()
 async def manage_comments(
     file_id: str,
     action: str,
