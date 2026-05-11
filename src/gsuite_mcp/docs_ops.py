@@ -41,6 +41,9 @@ def _find_heading(
     ``heading_level``, ``level_rank``, and ``paragraph_index`` when exactly
     one match is found.  Returns ``None`` on zero or multiple matches;
     populates *matches_out* (if provided) when ambiguous.
+
+    When Pass 1 produces multiple formal matches, Pass 2 is not attempted
+    and *matches_out* contains only the formal matches.
     """
     content = doc.get("body", {}).get("content", [])
     needle = section_heading.strip().lower()
