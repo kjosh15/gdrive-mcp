@@ -1,10 +1,98 @@
-"""Google Docs v1 operations — append, replace_text."""
+"""Google Docs v1 operations — append, replace_text, heading detection."""
 
 import asyncio
 import re
 from typing import Any
 
 from gsuite_mcp.retry import retry_transient
+
+# ---------------------------------------------------------------------------
+# Heading detection helpers
+# ---------------------------------------------------------------------------
+
+_HEADING_RANKS: dict[str, int] = {
+    f"HEADING_{i}": i for i in range(1, 7)
+}
+
+_FALLBACK_RANK: int = 7
+
+
+def _para_text(paragraph: dict) -> str:
+    """Extract plain text from a paragraph's elements (concatenated textRuns)."""
+    parts: list[str] = []
+    for elem in paragraph.get("elements", []):
+        tr = elem.get("textRun")
+        if tr:
+            parts.append(tr.get("content", ""))
+    return "".join(parts)
+
+
+def _find_heading(
+    doc: dict,
+    section_heading: str,
+    matches_out: list | None = None,
+) -> dict[str, Any] | None:
+    """Locate a section heading inside a Google Docs document structure.
+
+    Pass 1 — formal headings (HEADING_1 through HEADING_6).
+    Pass 2 — text fallback (any paragraph whose stripped text matches).
+
+    Returns a dict with ``text``, ``start_index``, ``end_index``,
+    ``heading_level``, ``level_rank``, and ``paragraph_index`` when exactly
+    one match is found.  Returns ``None`` on zero or multiple matches;
+    populates *matches_out* (if provided) when ambiguous.
+    """
+    content = doc.get("body", {}).get("content", [])
+    needle = section_heading.strip().lower()
+
+    def _build_match(block: dict, para_idx: int, named_style: str) -> dict:
+        raw_text = _para_text(block["paragraph"])
+        return {
+            "text": raw_text.strip(),
+            "start_index": block["startIndex"],
+            "end_index": block["endIndex"],
+            "heading_level": named_style,
+            "level_rank": _HEADING_RANKS.get(named_style, _FALLBACK_RANK),
+            "paragraph_index": para_idx,
+        }
+
+    # Pass 1 — formal headings
+    formal: list[dict] = []
+    for idx, block in enumerate(content):
+        para = block.get("paragraph")
+        if not para:
+            continue
+        style = para.get("paragraphStyle", {}).get("namedStyleType", "")
+        if style not in _HEADING_RANKS:
+            continue
+        text = _para_text(para).strip().lower()
+        if text == needle:
+            formal.append(_build_match(block, idx, style))
+
+    if len(formal) == 1:
+        return formal[0]
+    if formal:
+        if matches_out is not None:
+            matches_out.extend(formal)
+        return None
+
+    # Pass 2 — text fallback (no formal heading matched)
+    fallback: list[dict] = []
+    for idx, block in enumerate(content):
+        para = block.get("paragraph")
+        if not para:
+            continue
+        style = para.get("paragraphStyle", {}).get("namedStyleType", "")
+        text = _para_text(para).strip().lower()
+        if text == needle:
+            fallback.append(_build_match(block, idx, style))
+
+    if len(fallback) == 1:
+        return fallback[0]
+    if fallback:
+        if matches_out is not None:
+            matches_out.extend(fallback)
+    return None
 
 
 async def append_text_to_doc(
