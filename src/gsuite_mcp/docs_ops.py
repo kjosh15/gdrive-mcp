@@ -98,6 +98,43 @@ def _find_heading(
     return None
 
 
+def _find_section_end(doc: dict, heading: dict[str, Any]) -> int:
+    """Find the end index of a section starting at *heading*.
+
+    Scans forward from the heading's position through the document's content
+    blocks.  The section ends just before the next paragraph whose heading
+    level is **<=** the matched heading's ``level_rank`` (i.e. same or higher
+    importance).
+
+    For fallback headings (``level_rank == _FALLBACK_RANK``), *any* formal
+    heading (HEADING_1 through HEADING_6) terminates the section.
+
+    If no terminating heading is found, returns the ``endIndex`` of the last
+    content block (the section extends to the end of the document).
+    """
+    content = doc.get("body", {}).get("content", [])
+    start_para = heading["paragraph_index"]
+    level_rank = heading["level_rank"]
+
+    for block in content[start_para + 1 :]:
+        para = block.get("paragraph")
+        if not para:
+            continue
+        style = para.get("paragraphStyle", {}).get("namedStyleType", "")
+        if style not in _HEADING_RANKS:
+            continue
+        next_rank = _HEADING_RANKS[style]
+        # For fallback headings any formal heading ends the section;
+        # for formal headings only same-or-higher level (lower-or-equal rank).
+        if level_rank == _FALLBACK_RANK or next_rank <= level_rank:
+            return block["startIndex"]
+
+    # No terminating heading found — section extends to end of document.
+    if content:
+        return content[-1]["endIndex"]
+    return 0
+
+
 async def append_text_to_doc(
     docs_service, file_id: str, text: str
 ) -> dict[str, Any]:
