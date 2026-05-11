@@ -1,7 +1,9 @@
 """Tests for _find_heading, _find_section_end, and replace_section in docs_ops."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+from googleapiclient.errors import HttpError
 
 from gsuite_mcp.docs_ops import (
     _FALLBACK_RANK,
@@ -11,6 +13,7 @@ from gsuite_mcp.docs_ops import (
     _para_text,
     replace_section,
 )
+from gsuite_mcp.server import replace_section as server_replace_section
 
 
 def _make_doc(*paragraphs):
