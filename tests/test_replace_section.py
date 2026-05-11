@@ -4,6 +4,7 @@ from gsuite_mcp.docs_ops import (
     _FALLBACK_RANK,
     _HEADING_RANKS,
     _find_heading,
+    _find_section_end,
     _para_text,
 )
 
