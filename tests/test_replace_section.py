@@ -445,10 +445,10 @@ async def test_replace_section_include_heading_applies_heading_style():
     ]
     assert len(heading_style_reqs) == 1
     req = heading_style_reqs[0]["updateParagraphStyle"]
-    # Should cover first line only: from insert start to first newline
-    assert req["range"]["startIndex"] == 10  # heading start of "Chapter 1"
+    # Should cover first line only: from delete_start (heading start=0) to first newline
+    assert req["range"]["startIndex"] == 0
     first_newline = "New Title\n".index("\n") + 1
-    assert req["range"]["endIndex"] == 10 + first_newline
+    assert req["range"]["endIndex"] == 0 + first_newline
     assert req["fields"] == "namedStyleType"
 
 
