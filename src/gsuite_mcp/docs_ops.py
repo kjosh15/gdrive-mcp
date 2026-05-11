@@ -135,6 +135,138 @@ def _find_section_end(doc: dict, heading: dict[str, Any]) -> int:
     return 0
 
 
+async def replace_section(
+    docs_service,
+    file_id: str,
+    section_heading: str,
+    new_content: str,
+    include_heading: bool = False,
+) -> dict[str, Any]:
+    """Replace the body (or body + heading) of a document section.
+
+    Locates *section_heading* via ``_find_heading``, determines the section
+    boundary with ``_find_section_end``, then issues a single ``batchUpdate``
+    that deletes the old content and inserts *new_content* styled as
+    ``NORMAL_TEXT``.  When *include_heading* is ``True`` the heading itself
+    is also replaced and its original ``namedStyleType`` is reapplied to the
+    first paragraph of the inserted text.
+    """
+    doc = await asyncio.to_thread(
+        lambda: docs_service.documents()
+        .get(documentId=file_id)
+        .execute()
+    )
+
+    matches: list[dict] = []
+    heading = _find_heading(doc, section_heading, matches_out=matches)
+
+    if heading is None and not matches:
+        return {
+            "error": "HEADING_NOT_FOUND",
+            "retryable": False,
+            "message": f"Heading '{section_heading}' not found in document.",
+        }
+
+    if heading is None and matches:
+        return {
+            "error": "AMBIGUOUS_HEADING",
+            "retryable": False,
+            "message": (
+                f"Multiple headings match '{section_heading}'. "
+                "Provide a more specific heading."
+            ),
+            "matches": [
+                {
+                    "text": m["text"],
+                    "start_index": m["start_index"],
+                    "heading_level": m["heading_level"],
+                }
+                for m in matches
+            ],
+        }
+
+    section_end = _find_section_end(doc, heading)
+
+    delete_start = heading["start_index"] if include_heading else heading["end_index"]
+    delete_end = section_end
+
+    if delete_start >= delete_end and not include_heading:
+        return {
+            "error": "EMPTY_SECTION",
+            "retryable": False,
+            "message": (
+                f"Section '{heading['text']}' has no body content to replace. "
+                "Use include_heading=True to replace the heading itself."
+            ),
+        }
+
+    # Ensure trailing newline
+    if not new_content.endswith("\n"):
+        new_content += "\n"
+
+    characters_deleted = delete_end - delete_start
+    characters_inserted = len(new_content)
+
+    requests: list[dict] = [
+        {
+            "deleteContentRange": {
+                "range": {
+                    "startIndex": delete_start,
+                    "endIndex": delete_end,
+                }
+            }
+        },
+        {
+            "insertText": {
+                "location": {"index": delete_start},
+                "text": new_content,
+            }
+        },
+        {
+            "updateParagraphStyle": {
+                "range": {
+                    "startIndex": delete_start,
+                    "endIndex": delete_start + characters_inserted,
+                },
+                "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"},
+                "fields": "namedStyleType",
+            }
+        },
+    ]
+
+    # Restore heading style on first inserted paragraph when include_heading
+    if include_heading and heading["heading_level"] in _HEADING_RANKS:
+        first_newline = new_content.find("\n")
+        first_para_end = delete_start + first_newline + 1
+        requests.append({
+            "updateParagraphStyle": {
+                "range": {
+                    "startIndex": delete_start,
+                    "endIndex": first_para_end,
+                },
+                "paragraphStyle": {
+                    "namedStyleType": heading["heading_level"],
+                },
+                "fields": "namedStyleType",
+            }
+        })
+
+    await retry_transient(
+        lambda: docs_service.documents()
+        .batchUpdate(documentId=file_id, body={"requests": requests})
+        .execute()
+    )
+
+    return {
+        "file_id": file_id,
+        "section_heading": heading["text"],
+        "heading_level": heading["heading_level"],
+        "characters_deleted": characters_deleted,
+        "characters_inserted": characters_inserted,
+        "include_heading": include_heading,
+    }
+
+
 async def append_text_to_doc(
     docs_service, file_id: str, text: str
 ) -> dict[str, Any]:
