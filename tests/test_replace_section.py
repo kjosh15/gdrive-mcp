@@ -1,7 +1,5 @@
 """Tests for _find_heading and supporting helpers in docs_ops."""
 
-import pytest
-
 from gsuite_mcp.docs_ops import (
     _FALLBACK_RANK,
     _HEADING_RANKS,
