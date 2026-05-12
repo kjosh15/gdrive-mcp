@@ -385,3 +385,207 @@ async def replace_regex(
         .execute()
     )
     return len(matches)
+
+
+# ---------------------------------------------------------------------------
+# Batched document formatting
+# ---------------------------------------------------------------------------
+
+
+def _find_paragraph_containing(
+    content: list[dict], find_text: str,
+) -> tuple[int | None, dict | None]:
+    """Return (block_index, block) of first paragraph containing *find_text*.
+
+    Matching is case-insensitive and ignores leading/trailing whitespace.
+    """
+    needle = find_text.strip().lower()
+    for idx, block in enumerate(content):
+        para = block.get("paragraph")
+        if not para:
+            continue
+        text = _para_text(para).strip().lower()
+        if needle in text:
+            return idx, block
+    return None, None
+
+
+async def format_document(
+    docs_service,
+    file_id: str,
+    operations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply a batch of formatting operations to a Google Doc.
+
+    Each operation is a dict with an ``action`` key and action-specific fields:
+
+    - ``{"action": "set_style", "find_text": "...", "style": "HEADING_1"}``
+      Change the paragraph style of the first paragraph containing *find_text*.
+
+    - ``{"action": "delete", "find_text": "..."}``
+      Delete the first paragraph containing *find_text*.
+
+    - ``{"action": "delete_empty_after", "find_text": "..."}``
+      Delete consecutive empty/whitespace-only paragraphs immediately after
+      the first paragraph containing *find_text*.
+
+    All matching is case-insensitive substring (stripped).  Operations that
+    cannot find their target are reported as ``not_found`` but do not block
+    other operations.  Requests are sorted by descending document index so
+    deletions do not shift earlier operations.
+    """
+    # -- Validate ----------------------------------------------------------
+    if not operations:
+        return {
+            "error": "EMPTY_OPERATIONS",
+            "retryable": False,
+            "message": "operations list must contain at least one operation.",
+        }
+
+    valid_actions = {"set_style", "delete", "delete_empty_after"}
+    for i, op in enumerate(operations):
+        action = op.get("action")
+        if action not in valid_actions:
+            return {
+                "error": "INVALID_ACTION",
+                "retryable": False,
+                "message": (
+                    f"Operation {i}: unknown action '{action}'. "
+                    f"Valid actions: {', '.join(sorted(valid_actions))}."
+                ),
+            }
+        find_text = op.get("find_text", "")
+        if not isinstance(find_text, str) or not find_text.strip():
+            return {
+                "error": "MISSING_FIND_TEXT",
+                "retryable": False,
+                "message": f"Operation {i}: 'find_text' is required and must be non-blank.",
+            }
+        if action == "set_style":
+            style = op.get("style")
+            if style not in VALID_NAMED_STYLES:
+                return {
+                    "error": "INVALID_STYLE",
+                    "retryable": False,
+                    "message": (
+                        f"Operation {i}: invalid style '{style}'. "
+                        f"Valid styles: {', '.join(sorted(VALID_NAMED_STYLES))}."
+                    ),
+                }
+
+    # -- Fetch document ----------------------------------------------------
+    doc = await asyncio.to_thread(
+        lambda: docs_service.documents()
+        .get(documentId=file_id)
+        .execute()
+    )
+    content = doc.get("body", {}).get("content", [])
+
+    # -- Resolve operations to API requests --------------------------------
+    # Each entry: (startIndex, api_request_dict)
+    pending: list[tuple[int, dict]] = []
+    results: list[dict[str, Any]] = []
+
+    for op in operations:
+        action = op["action"]
+        find_text = op["find_text"]
+
+        block_idx, block = _find_paragraph_containing(content, find_text)
+
+        if block is None:
+            results.append({
+                "action": action,
+                "find_text": find_text,
+                "status": "not_found",
+            })
+            continue
+
+        if action == "set_style":
+            style = op["style"]
+            pending.append((block["startIndex"], {
+                "updateParagraphStyle": {
+                    "range": {
+                        "startIndex": block["startIndex"],
+                        "endIndex": block["endIndex"],
+                    },
+                    "paragraphStyle": {"namedStyleType": style},
+                    "fields": "namedStyleType",
+                }
+            }))
+            results.append({
+                "action": "set_style",
+                "find_text": find_text,
+                "style": style,
+                "status": "applied",
+                "start_index": block["startIndex"],
+            })
+
+        elif action == "delete":
+            chars = block["endIndex"] - block["startIndex"]
+            pending.append((block["startIndex"], {
+                "deleteContentRange": {
+                    "range": {
+                        "startIndex": block["startIndex"],
+                        "endIndex": block["endIndex"],
+                    }
+                }
+            }))
+            results.append({
+                "action": "delete",
+                "find_text": find_text,
+                "status": "applied",
+                "characters_deleted": chars,
+            })
+
+        elif action == "delete_empty_after":
+            empty_count = 0
+            deleted_chars = 0
+            scan = block_idx + 1
+            while scan < len(content):
+                next_block = content[scan]
+                next_para = next_block.get("paragraph")
+                if not next_para:
+                    break
+                next_text = _para_text(next_para).strip()
+                if next_text:
+                    break
+                chars = next_block["endIndex"] - next_block["startIndex"]
+                pending.append((next_block["startIndex"], {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": next_block["startIndex"],
+                            "endIndex": next_block["endIndex"],
+                        }
+                    }
+                }))
+                empty_count += 1
+                deleted_chars += chars
+                scan += 1
+
+            results.append({
+                "action": "delete_empty_after",
+                "find_text": find_text,
+                "status": "applied",
+                "empty_paragraphs_deleted": empty_count,
+                "characters_deleted": deleted_chars,
+            })
+
+    # -- Execute -----------------------------------------------------------
+    applied = len([r for r in results if r["status"] == "applied"])
+
+    if pending:
+        # Sort by startIndex descending so deletions don't shift earlier ops
+        pending.sort(key=lambda x: x[0], reverse=True)
+        batch_requests = [req for _, req in pending]
+
+        await retry_transient(
+            lambda: docs_service.documents()
+            .batchUpdate(documentId=file_id, body={"requests": batch_requests})
+            .execute()
+        )
+
+    return {
+        "file_id": file_id,
+        "operations_applied": applied,
+        "results": results,
+    }
