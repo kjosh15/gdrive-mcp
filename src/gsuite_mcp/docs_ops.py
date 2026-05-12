@@ -1,4 +1,4 @@
-"""Google Docs v1 operations — append, replace_text, heading detection."""
+"""Google Docs v1 operations — append, replace_text, heading detection, format."""
 
 import asyncio
 import re
@@ -15,6 +15,13 @@ _HEADING_RANKS: dict[str, int] = {
 }
 
 _FALLBACK_RANK: int = 7
+
+VALID_NAMED_STYLES: set[str] = {
+    "NORMAL_TEXT",
+    "TITLE",
+    "SUBTITLE",
+    *(f"HEADING_{i}" for i in range(1, 7)),
+}
 
 
 def _para_text(paragraph: dict) -> str:
