@@ -300,6 +300,70 @@ async def replace_section(
 
 
 @mcp.tool()
+async def format_document(
+    file_id: str,
+    operations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply paragraph formatting operations to a Google Doc in a single batch.
+
+    Each operation is a dict with an "action" key:
+
+    - set_style: Change paragraph style.
+      {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"}
+      Valid styles: NORMAL_TEXT, TITLE, SUBTITLE, HEADING_1..HEADING_6.
+
+    - delete: Delete a paragraph.
+      {"action": "delete", "find_text": "Paragraph to remove"}
+
+    - delete_empty_after: Remove blank paragraphs after a matched paragraph.
+      {"action": "delete_empty_after", "find_text": "Introduction"}
+
+    find_text matching is case-insensitive substring. Operations that can't
+    find their target are reported as not_found but don't block others.
+
+    Only works on Google Docs (mimeType application/vnd.google-apps.document).
+    """
+    drive = auth.get_drive_service()
+    meta = await asyncio.to_thread(
+        lambda: drive.files()
+        .get(fileId=file_id, fields="name,mimeType,modifiedTime")
+        .execute()
+    )
+    if meta.get("mimeType") != GOOGLE_DOC_MIME:
+        return {
+            "error": "NOT_A_GOOGLE_DOC",
+            "retryable": False,
+            "message": (
+                f"format_document only works on Google Docs. This file is "
+                f"{meta.get('mimeType')}."
+            ),
+        }
+    docs = auth.get_docs_service()
+
+    try:
+        result = await docs_ops.format_document(docs, file_id, operations)
+        if "error" in result:
+            return result
+        meta2 = await asyncio.to_thread(
+            lambda: drive.files()
+            .get(fileId=file_id, fields="modifiedTime")
+            .execute()
+        )
+        result["modified_time"] = meta2.get("modifiedTime", "")
+        return result
+    except HttpError as exc:
+        status = exc.resp.status if exc.resp else 0
+        return {
+            "error": "GOOGLE_API_ERROR",
+            "retryable": status in TRANSIENT_CODES,
+            "http_status": status,
+            "message": (
+                f"Google Docs API error (HTTP {status}) after retries: {exc}"
+            ),
+        }
+
+
+@mcp.tool()
 async def manage_comments(
     file_id: str,
     action: str,
