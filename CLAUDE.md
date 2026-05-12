@@ -45,7 +45,8 @@ uv run python -m gsuite_mcp.auth_setup
 6. `append_to_file` — native append for Docs/Sheets; roundtrip fallback for plain files
 7. `replace_text` — exact + regex replace in Google Docs
 8. `replace_section` — replace content by heading/section in Google Docs (heading detection + positional delete/insert)
-9. `manage_comments` — list/create/reply/resolve on Drive comments
+9. `format_document` — batch paragraph formatting: set_style (HEADING_1..6, NORMAL_TEXT, TITLE, SUBTITLE), delete paragraph, delete empty paragraphs after a match
+10. `manage_comments` — list/create/reply/resolve on Drive comments
 10. `docx_suggest_edit` — tracked-change revision marks in .docx files
 11. `create_reply_draft` — thread-aware Gmail draft creation (draft only, human sends)
 12. `gdoc_template_populate` — copy template → native Google Doc, replace placeholders
