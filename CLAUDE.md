@@ -72,5 +72,5 @@ Optional:
 - Gmail scopes: `gmail.compose` + `gmail.readonly` (narrowest for drafts). Users must re-run `auth_setup` after upgrade to grant Gmail scopes.
 
 ## Session Tracking
-Total Claude sessions: 9
-Last session: 2026-05-12 15:44:32
+Total Claude sessions: 10
+Last session: 2026-05-15 14:23:18
