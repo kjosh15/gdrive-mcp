@@ -165,13 +165,13 @@ async def test_set_style_case_insensitive():
 
 @pytest.mark.asyncio
 async def test_set_style_substring_match():
-    """find_text matches a substring within the paragraph text."""
+    """find_text matches a substring within the paragraph text with substring=True."""
     doc = _make_doc(
         (0, 30, "Chapter 1: Introduction\n", "NORMAL_TEXT"),
     )
     svc = _mock_docs_service(doc)
     result = await format_document(svc, "f1", [
-        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"},
+        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1", "substring": True},
     ])
     assert result["operations_applied"] == 1
 
