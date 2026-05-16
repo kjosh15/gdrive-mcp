@@ -204,7 +204,7 @@ async def test_delete_paragraph():
     )
     svc = _mock_docs_service(doc)
     result = await format_document(svc, "f1", [
-        {"action": "delete", "find_text": "Paragraph to remove"},
+        {"action": "delete", "find_text": "Paragraph to remove."},
     ])
 
     assert result["operations_applied"] == 1
