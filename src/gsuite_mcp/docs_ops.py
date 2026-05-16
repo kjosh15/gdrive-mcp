@@ -192,6 +192,7 @@ async def replace_section(
             ],
         }
 
+    content = doc.get("body", {}).get("content", [])
     section_end = _find_section_end(doc, heading)
 
     delete_start = heading["start_index"] if include_heading else heading["end_index"]
@@ -214,12 +215,15 @@ async def replace_section(
     characters_deleted = delete_end - delete_start
     characters_inserted = len(new_content)
 
+    # Clamp delete range to avoid the structural trailing newline
+    delete_end_clamped = _clamp_delete_end(delete_end, content)
+
     requests: list[dict] = [
         {
             "deleteContentRange": {
                 "range": {
                     "startIndex": delete_start,
-                    "endIndex": delete_end,
+                    "endIndex": delete_end_clamped,
                 }
             }
         },
