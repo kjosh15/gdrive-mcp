@@ -353,15 +353,16 @@ async def format_document(
     docs = auth.get_docs_service()
 
     try:
-        result = await docs_ops.format_document(docs, file_id, operations)
+        result = await docs_ops.format_document(docs, file_id, operations, preview=preview)
         if "error" in result:
             return result
-        meta2 = await asyncio.to_thread(
-            lambda: drive.files()
-            .get(fileId=file_id, fields="modifiedTime")
-            .execute()
-        )
-        result["modified_time"] = meta2.get("modifiedTime", "")
+        if not preview:
+            meta2 = await asyncio.to_thread(
+                lambda: drive.files()
+                .get(fileId=file_id, fields="modifiedTime")
+                .execute()
+            )
+            result["modified_time"] = meta2.get("modifiedTime", "")
         return result
     except HttpError as exc:
         status = exc.resp.status if exc.resp else 0
