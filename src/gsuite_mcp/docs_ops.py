@@ -441,25 +441,36 @@ async def format_document(
     docs_service,
     file_id: str,
     operations: list[dict[str, Any]],
+    *,
+    preview: bool = False,
 ) -> dict[str, Any]:
     """Apply a batch of formatting operations to a Google Doc.
 
     Each operation is a dict with an ``action`` key and action-specific fields:
 
     - ``{"action": "set_style", "find_text": "...", "style": "HEADING_1"}``
-      Change the paragraph style of the first paragraph containing *find_text*.
+      Change the paragraph style.  Matching is exact (strip + casefold).
+      Add ``"substring": true`` for legacy substring matching.
+      If multiple paragraphs match, fails with ``multi_match_error`` unless
+      ``"match_all": true`` is set on the operation.
 
     - ``{"action": "delete", "find_text": "..."}``
-      Delete the first paragraph containing *find_text*.
+      Delete a paragraph.  Same matching rules as set_style.
+
+    - ``{"action": "delete_by_index", "paragraph_index": N}``
+      Delete the paragraph at content index *N* (from a prior document read).
 
     - ``{"action": "delete_empty_after", "find_text": "..."}``
       Delete consecutive empty/whitespace-only paragraphs immediately after
-      the first paragraph containing *find_text*.
+      the first matching paragraph.
 
-    All matching is case-insensitive substring (stripped).  Operations that
-    cannot find their target are reported as ``not_found`` but do not block
-    other operations.  Requests are sorted by descending document index so
-    deletions do not shift earlier operations.
+    Top-level options:
+
+    - ``preview=True``: Return the list of paragraphs each operation would
+      affect (paragraph index + first 80 chars + action) without executing.
+
+    Operations that cannot find their target are reported as ``not_found``
+    but do not block other operations.
     """
     # -- Validate ----------------------------------------------------------
     if not operations:
@@ -469,7 +480,7 @@ async def format_document(
             "message": "operations list must contain at least one operation.",
         }
 
-    valid_actions = {"set_style", "delete", "delete_empty_after"}
+    valid_actions = {"set_style", "delete", "delete_empty_after", "delete_by_index"}
     for i, op in enumerate(operations):
         action = op.get("action")
         if action not in valid_actions:
@@ -481,13 +492,22 @@ async def format_document(
                     f"Valid actions: {', '.join(sorted(valid_actions))}."
                 ),
             }
-        find_text = op.get("find_text", "")
-        if not isinstance(find_text, str) or not find_text.strip():
-            return {
-                "error": "MISSING_FIND_TEXT",
-                "retryable": False,
-                "message": f"Operation {i}: 'find_text' is required and must be non-blank.",
-            }
+        if action == "delete_by_index":
+            pi = op.get("paragraph_index")
+            if not isinstance(pi, int):
+                return {
+                    "error": "MISSING_PARAGRAPH_INDEX",
+                    "retryable": False,
+                    "message": f"Operation {i}: 'paragraph_index' is required and must be an integer.",
+                }
+        else:
+            find_text = op.get("find_text", "")
+            if not isinstance(find_text, str) or not find_text.strip():
+                return {
+                    "error": "MISSING_FIND_TEXT",
+                    "retryable": False,
+                    "message": f"Operation {i}: 'find_text' is required and must be non-blank.",
+                }
         if action == "set_style":
             style = op.get("style")
             if style not in VALID_NAMED_STYLES:
@@ -515,11 +535,58 @@ async def format_document(
 
     for op in operations:
         action = op["action"]
+
+        # --- delete_by_index: no string matching --------------------------
+        if action == "delete_by_index":
+            para_idx = op["paragraph_index"]
+            if para_idx < 0 or para_idx >= len(content):
+                results.append({
+                    "action": "delete_by_index",
+                    "paragraph_index": para_idx,
+                    "status": "index_out_of_range",
+                })
+                continue
+            block = content[para_idx]
+            if not block.get("paragraph"):
+                results.append({
+                    "action": "delete_by_index",
+                    "paragraph_index": para_idx,
+                    "status": "not_a_paragraph",
+                })
+                continue
+            end_idx = _clamp_delete_end(block["endIndex"], content)
+            chars = end_idx - block["startIndex"]
+            text_snippet = _para_text(block["paragraph"]).strip()[:80]
+            if preview:
+                results.append({
+                    "action": "delete_by_index",
+                    "paragraph_index": para_idx,
+                    "text": text_snippet,
+                    "status": "would_apply",
+                })
+            else:
+                pending.append((block["startIndex"], {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": block["startIndex"],
+                            "endIndex": end_idx,
+                        }
+                    }
+                }))
+                results.append({
+                    "action": "delete_by_index",
+                    "paragraph_index": para_idx,
+                    "status": "applied",
+                    "characters_deleted": chars,
+                })
+            continue
+
+        # --- Text-matching actions ----------------------------------------
         find_text = op["find_text"]
+        use_substring = bool(op.get("substring", False))
+        matches = _find_paragraphs_matching(content, find_text, substring=use_substring)
 
-        block_idx, block = _find_paragraph_containing(content, find_text)
-
-        if block is None:
+        if not matches:
             results.append({
                 "action": action,
                 "find_text": find_text,
@@ -527,44 +594,94 @@ async def format_document(
             })
             continue
 
+        # Multi-match protection for delete and set_style
+        if action in ("delete", "set_style") and len(matches) > 1:
+            if not op.get("match_all", False):
+                results.append({
+                    "action": action,
+                    "find_text": find_text,
+                    "status": "multi_match_error",
+                    "matches": [
+                        {
+                            "paragraph_index": idx,
+                            "text": _para_text(blk["paragraph"]).strip()[:80],
+                        }
+                        for idx, blk in matches
+                    ],
+                })
+                continue
+
         if action == "set_style":
             style = op["style"]
-            pending.append((block["startIndex"], {
-                "updateParagraphStyle": {
-                    "range": {
-                        "startIndex": block["startIndex"],
-                        "endIndex": block["endIndex"],
-                    },
-                    "paragraphStyle": {"namedStyleType": style},
-                    "fields": "namedStyleType",
-                }
-            }))
-            results.append({
-                "action": "set_style",
-                "find_text": find_text,
-                "style": style,
-                "status": "applied",
-                "start_index": block["startIndex"],
-            })
+            total_applied = 0
+            for block_idx, block in matches:
+                text_snippet = _para_text(block["paragraph"]).strip()[:80]
+                if preview:
+                    results.append({
+                        "action": "set_style",
+                        "find_text": find_text,
+                        "style": style,
+                        "paragraph_index": block_idx,
+                        "text": text_snippet,
+                        "status": "would_apply",
+                    })
+                else:
+                    pending.append((block["startIndex"], {
+                        "updateParagraphStyle": {
+                            "range": {
+                                "startIndex": block["startIndex"],
+                                "endIndex": block["endIndex"],
+                            },
+                            "paragraphStyle": {"namedStyleType": style},
+                            "fields": "namedStyleType",
+                        }
+                    }))
+                    total_applied += 1
+            if not preview:
+                # Single result entry for the operation
+                results.append({
+                    "action": "set_style",
+                    "find_text": find_text,
+                    "style": style,
+                    "status": "applied",
+                    "start_index": matches[0][1]["startIndex"],
+                })
 
         elif action == "delete":
-            chars = block["endIndex"] - block["startIndex"]
-            pending.append((block["startIndex"], {
-                "deleteContentRange": {
-                    "range": {
-                        "startIndex": block["startIndex"],
-                        "endIndex": block["endIndex"],
-                    }
-                }
-            }))
-            results.append({
-                "action": "delete",
-                "find_text": find_text,
-                "status": "applied",
-                "characters_deleted": chars,
-            })
+            total_chars = 0
+            for block_idx, block in matches:
+                end_idx = _clamp_delete_end(block["endIndex"], content)
+                chars = end_idx - block["startIndex"]
+                text_snippet = _para_text(block["paragraph"]).strip()[:80]
+                if preview:
+                    results.append({
+                        "action": "delete",
+                        "find_text": find_text,
+                        "paragraph_index": block_idx,
+                        "text": text_snippet,
+                        "status": "would_apply",
+                    })
+                else:
+                    pending.append((block["startIndex"], {
+                        "deleteContentRange": {
+                            "range": {
+                                "startIndex": block["startIndex"],
+                                "endIndex": end_idx,
+                            }
+                        }
+                    }))
+                    total_chars += chars
+            if not preview:
+                results.append({
+                    "action": "delete",
+                    "find_text": find_text,
+                    "status": "applied",
+                    "characters_deleted": total_chars,
+                })
 
         elif action == "delete_empty_after":
+            # Use first match only (non-destructive to matched paragraph)
+            block_idx, block = matches[0]
             empty_count = 0
             deleted_chars = 0
             scan = block_idx + 1
@@ -576,15 +693,17 @@ async def format_document(
                 next_text = _para_text(next_para).strip()
                 if next_text:
                     break
-                chars = next_block["endIndex"] - next_block["startIndex"]
-                pending.append((next_block["startIndex"], {
-                    "deleteContentRange": {
-                        "range": {
-                            "startIndex": next_block["startIndex"],
-                            "endIndex": next_block["endIndex"],
+                end_idx = _clamp_delete_end(next_block["endIndex"], content)
+                chars = end_idx - next_block["startIndex"]
+                if not preview:
+                    pending.append((next_block["startIndex"], {
+                        "deleteContentRange": {
+                            "range": {
+                                "startIndex": next_block["startIndex"],
+                                "endIndex": end_idx,
+                            }
                         }
-                    }
-                }))
+                    }))
                 empty_count += 1
                 deleted_chars += chars
                 scan += 1
@@ -592,12 +711,19 @@ async def format_document(
             results.append({
                 "action": "delete_empty_after",
                 "find_text": find_text,
-                "status": "applied",
+                "status": "would_apply" if preview else "applied",
                 "empty_paragraphs_deleted": empty_count,
                 "characters_deleted": deleted_chars,
             })
 
     # -- Execute -----------------------------------------------------------
+    if preview:
+        return {
+            "file_id": file_id,
+            "preview": True,
+            "results": results,
+        }
+
     applied = len([r for r in results if r["status"] == "applied"])
 
     if pending:
