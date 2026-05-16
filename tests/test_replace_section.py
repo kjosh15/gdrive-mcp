@@ -471,6 +471,31 @@ async def test_replace_section_empty_section_body():
 
 
 @pytest.mark.asyncio
+async def test_replace_section_final_section_clamps_trailing_newline():
+    """Replacing the final section clamps delete endIndex to preserve trailing newline."""
+    doc = _make_doc(
+        (0, 10, "Chapter 1\n", "HEADING_1"),
+        (10, 30, "Some body text here.\n", "NORMAL_TEXT"),
+        (30, 40, "Chapter 2\n", "HEADING_1"),
+        (40, 60, "Final body text....\n", "NORMAL_TEXT"),  # 60 = doc end
+    )
+    svc = _mock_docs_service(doc)
+    result = await replace_section(svc, "file123", "Chapter 2", "New final.\n")
+
+    assert "error" not in result
+    assert result["characters_deleted"] == 60 - 40  # logical deletion
+
+    call_args = svc.documents().batchUpdate.call_args
+    body = call_args[1]["body"] if "body" in (call_args[1] or {}) else call_args[0][0] if call_args[0] else call_args[1].get("body")
+    requests = body["requests"]
+
+    # The delete request endIndex must be clamped (60 - 1 = 59)
+    delete_req = requests[0]["deleteContentRange"]["range"]
+    assert delete_req["startIndex"] == 40
+    assert delete_req["endIndex"] == 59  # Clamped!
+
+
+@pytest.mark.asyncio
 async def test_replace_section_ensures_trailing_newline():
     """Content without trailing newline gets one added."""
     doc = _make_doc(
