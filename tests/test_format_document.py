@@ -437,3 +437,199 @@ async def test_server_format_catches_http_error(mock_services):
     assert result["error"] == "GOOGLE_API_ERROR"
     assert result["retryable"] is True
     assert result["http_status"] == 500
+
+
+# -------------------------------------------------------------------
+# Issue 1: Exact match default + safety features
+# -------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_exact_match_default_no_longer_substring():
+    """Default matching is exact (strip + casefold). Substring no longer matches."""
+    doc = _make_doc(
+        (0, 30, "Chapter 1: Introduction\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"},
+    ])
+    # "Introduction" != "Chapter 1: Introduction" after strip+casefold
+    assert result["operations_applied"] == 0
+    assert result["results"][0]["status"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_substring_opt_in():
+    """Operations can opt-in to substring matching with substring: True."""
+    doc = _make_doc(
+        (0, 30, "Chapter 1: Introduction\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1", "substring": True},
+    ])
+    assert result["operations_applied"] == 1
+    assert result["results"][0]["status"] == "applied"
+
+
+@pytest.mark.asyncio
+async def test_delete_multi_match_fails_without_match_all():
+    """When >1 paragraph matches, delete fails with multi_match_error."""
+    doc = _make_doc(
+        (0, 10, "Duplicate\n", "NORMAL_TEXT"),
+        (10, 20, "Duplicate\n", "NORMAL_TEXT"),
+        (20, 30, "Different.\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete", "find_text": "Duplicate"},
+    ])
+    assert result["results"][0]["status"] == "multi_match_error"
+    assert "matches" in result["results"][0]
+    assert len(result["results"][0]["matches"]) == 2
+    # Verify match entries have paragraph_index and text
+    for m in result["results"][0]["matches"]:
+        assert "paragraph_index" in m
+        assert "text" in m
+    # No batchUpdate since only operation failed
+    svc.documents().batchUpdate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_multi_match_with_match_all():
+    """match_all: True on operation allows deleting all matches."""
+    doc = _make_doc(
+        (0, 10, "Duplicate\n", "NORMAL_TEXT"),
+        (10, 20, "Duplicate\n", "NORMAL_TEXT"),
+        (20, 30, "Different.\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete", "find_text": "Duplicate", "match_all": True},
+    ])
+    assert result["operations_applied"] == 1
+    assert result["results"][0]["status"] == "applied"
+    assert result["results"][0]["characters_deleted"] == 20  # both paragraphs (10 + 10)
+
+    call_args = svc.documents().batchUpdate.call_args
+    requests = call_args.kwargs["body"]["requests"]
+    # Two delete requests (sorted descending)
+    assert len(requests) == 2
+    assert requests[0]["deleteContentRange"]["range"]["startIndex"] == 10
+    assert requests[1]["deleteContentRange"]["range"]["startIndex"] == 0
+
+
+@pytest.mark.asyncio
+async def test_set_style_multi_match_fails():
+    """Multi-match protection applies to set_style too."""
+    doc = _make_doc(
+        (0, 10, "Duplicate\n", "NORMAL_TEXT"),
+        (10, 20, "Duplicate\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "set_style", "find_text": "Duplicate", "style": "HEADING_1"},
+    ])
+    assert result["results"][0]["status"] == "multi_match_error"
+    assert len(result["results"][0]["matches"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_preview_mode_no_mutation():
+    """preview=True returns what would happen without executing."""
+    doc = _make_doc(
+        (0, 14, "Introduction\n", "NORMAL_TEXT"),
+        (14, 30, "Some body text.\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"},
+    ], preview=True)
+
+    assert "error" not in result
+    assert result.get("preview") is True
+    assert len(result["results"]) == 1
+    assert result["results"][0]["paragraph_index"] == 0
+    assert "Introduction" in result["results"][0]["text"]
+    assert result["results"][0]["action"] == "set_style"
+    # No batchUpdate called
+    svc.documents().batchUpdate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_by_index():
+    """delete_by_index takes paragraph_index and deletes that paragraph."""
+    doc = _make_doc(
+        (0, 14, "Introduction\n", "HEADING_1"),
+        (14, 30, "Body paragraph.\n", "NORMAL_TEXT"),
+        (30, 42, "Conclusion.\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete_by_index", "paragraph_index": 1},
+    ])
+    assert result["operations_applied"] == 1
+    assert result["results"][0]["status"] == "applied"
+    assert result["results"][0]["characters_deleted"] == 30 - 14
+
+    call_args = svc.documents().batchUpdate.call_args
+    requests = call_args.kwargs["body"]["requests"]
+    delete_req = requests[0]["deleteContentRange"]["range"]
+    assert delete_req["startIndex"] == 14
+    assert delete_req["endIndex"] == 30
+
+
+@pytest.mark.asyncio
+async def test_delete_by_index_out_of_range():
+    """delete_by_index with invalid index reports error."""
+    doc = _make_doc(
+        (0, 14, "Introduction\n", "HEADING_1"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete_by_index", "paragraph_index": 99},
+    ])
+    assert result["results"][0]["status"] == "index_out_of_range"
+    svc.documents().batchUpdate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_last_paragraph_clamps_trailing_newline():
+    """Deleting the last paragraph clamps endIndex to preserve structural newline."""
+    doc = _make_doc(
+        (0, 14, "Introduction\n", "HEADING_1"),
+        (14, 30, "Last paragraph.\n", "NORMAL_TEXT"),  # 30 = doc end
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete", "find_text": "Last paragraph."},
+    ])
+    assert result["operations_applied"] == 1
+
+    call_args = svc.documents().batchUpdate.call_args
+    requests = call_args.kwargs["body"]["requests"]
+    delete_req = requests[0]["deleteContentRange"]["range"]
+    assert delete_req["startIndex"] == 14
+    # Clamped: 30 - 1 = 29
+    assert delete_req["endIndex"] == 29
+
+
+@pytest.mark.asyncio
+async def test_multi_match_error_does_not_block_other_ops():
+    """A multi_match_error on one operation doesn't prevent others from executing."""
+    doc = _make_doc(
+        (0, 10, "Duplicate\n", "NORMAL_TEXT"),
+        (10, 20, "Duplicate\n", "NORMAL_TEXT"),
+        (20, 34, "Introduction\n", "NORMAL_TEXT"),
+    )
+    svc = _mock_docs_service(doc)
+    result = await format_document(svc, "f1", [
+        {"action": "delete", "find_text": "Duplicate"},
+        {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"},
+    ])
+    # First op fails with multi_match, second succeeds
+    assert result["results"][0]["status"] == "multi_match_error"
+    assert result["results"][1]["status"] == "applied"
+    assert result["operations_applied"] == 1
+    # batchUpdate is called for the successful operation
+    svc.documents().batchUpdate.assert_called_once()
