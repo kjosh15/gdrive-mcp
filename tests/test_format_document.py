@@ -317,7 +317,7 @@ async def test_multiple_operations():
     svc = _mock_docs_service(doc)
     result = await format_document(svc, "f1", [
         {"action": "set_style", "find_text": "Introduction", "style": "HEADING_1"},
-        {"action": "delete", "find_text": "Old paragraph"},
+        {"action": "delete", "find_text": "Old paragraph."},
         {"action": "set_style", "find_text": "Conclusion", "style": "HEADING_1"},
     ])
 
