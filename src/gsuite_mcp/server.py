@@ -303,6 +303,7 @@ async def replace_section(
 async def format_document(
     file_id: str,
     operations: list[dict[str, Any]],
+    preview: bool = False,
 ) -> dict[str, Any]:
     """Apply paragraph formatting operations to a Google Doc in a single batch.
 
@@ -315,11 +316,22 @@ async def format_document(
     - delete: Delete a paragraph.
       {"action": "delete", "find_text": "Paragraph to remove"}
 
+    - delete_by_index: Delete a paragraph by its content index (from a prior read).
+      {"action": "delete_by_index", "paragraph_index": 3}
+
     - delete_empty_after: Remove blank paragraphs after a matched paragraph.
       {"action": "delete_empty_after", "find_text": "Introduction"}
 
-    find_text matching is case-insensitive substring. Operations that can't
-    find their target are reported as not_found but don't block others.
+    Matching rules:
+    - find_text matching is exact (strip + case-fold) by default.
+    - Add "substring": true on an operation for legacy substring matching.
+    - If a delete or set_style matches multiple paragraphs, it fails with
+      a multi_match_error listing all matches (paragraph index + text snippet).
+      Pass "match_all": true on the operation to apply to all matches.
+
+    Top-level options:
+    - preview: If true, returns what each operation would affect (paragraph
+      index + first 80 chars + action) without executing any changes.
 
     Only works on Google Docs (mimeType application/vnd.google-apps.document).
     """
