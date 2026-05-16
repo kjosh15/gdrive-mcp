@@ -392,22 +392,49 @@ async def replace_regex(
 # ---------------------------------------------------------------------------
 
 
-def _find_paragraph_containing(
-    content: list[dict], find_text: str,
-) -> tuple[int | None, dict | None]:
-    """Return (block_index, block) of first paragraph containing *find_text*.
+def _find_paragraphs_matching(
+    content: list[dict],
+    find_text: str,
+    *,
+    substring: bool = False,
+) -> list[tuple[int, dict]]:
+    """Return all (block_index, block) pairs whose paragraph text matches.
 
-    Matching is case-insensitive and ignores leading/trailing whitespace.
+    Default: exact match after strip + casefold.
+    substring=True: legacy ``needle in text`` behavior.
     """
-    needle = find_text.strip().lower()
+    needle = find_text.strip().casefold()
+    matches: list[tuple[int, dict]] = []
     for idx, block in enumerate(content):
         para = block.get("paragraph")
         if not para:
             continue
-        text = _para_text(para).strip().lower()
-        if needle in text:
-            return idx, block
-    return None, None
+        text = _para_text(para).strip().casefold()
+        if substring:
+            if needle in text:
+                matches.append((idx, block))
+        else:
+            if text == needle:
+                matches.append((idx, block))
+    return matches
+
+
+def _doc_body_end_index(content: list[dict]) -> int:
+    """Return the body's endIndex (last content block's endIndex), or 0."""
+    if content:
+        return content[-1]["endIndex"]
+    return 0
+
+
+def _clamp_delete_end(end_index: int, content: list[dict]) -> int:
+    """Clamp endIndex to avoid the structural trailing newline.
+
+    If end_index equals (or exceeds) the document body's endIndex, subtract 1.
+    """
+    body_end = _doc_body_end_index(content)
+    if body_end > 0 and end_index >= body_end:
+        return body_end - 1
+    return end_index
 
 
 async def format_document(
