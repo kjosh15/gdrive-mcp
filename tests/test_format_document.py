@@ -219,22 +219,26 @@ async def test_delete_paragraph():
 
 
 @pytest.mark.asyncio
-async def test_delete_first_match_only():
-    """When multiple paragraphs match, only the first is deleted."""
+async def test_delete_first_match_only_substring():
+    """With substring=True, when multiple paragraphs match, only the first is deleted
+    (single match since 'Note: A' != 'Note: B' with exact, but both contain 'Note')."""
     doc = _make_doc(
         (0, 8, "Note: A\n", "NORMAL_TEXT"),
         (8, 16, "Note: B\n", "NORMAL_TEXT"),
     )
     svc = _mock_docs_service(doc)
+    # With substring + match_all, both are deleted
     result = await format_document(svc, "f1", [
-        {"action": "delete", "find_text": "Note"},
+        {"action": "delete", "find_text": "Note", "substring": True, "match_all": True},
     ])
 
     assert result["operations_applied"] == 1
     call_args = svc.documents().batchUpdate.call_args
     requests = call_args.kwargs["body"]["requests"]
-    # Should delete the first match (startIndex=0)
-    assert requests[0]["deleteContentRange"]["range"]["startIndex"] == 0
+    # Two deletes, sorted descending by startIndex
+    assert len(requests) == 2
+    assert requests[0]["deleteContentRange"]["range"]["startIndex"] == 8
+    assert requests[1]["deleteContentRange"]["range"]["startIndex"] == 0
 
 
 # -------------------------------------------------------------------
